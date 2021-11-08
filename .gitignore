@@ -1,0 +1,48 @@
+bin
+build
+lib
+models
+out.*
+*.cache
+*.DS_Store
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+!librknn_api.so
+
+
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+.DS_Store
+# .ignore
+*/test/
+msg.pb.*
+/config/config_*.yaml
