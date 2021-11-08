@@ -1,7 +1,6 @@
 bin
 build
 lib
-models
 out.*
 *.cache
 *.DS_Store
@@ -42,7 +41,3 @@ out.*
 *.out
 *.app
 .DS_Store
-# .ignore
-*/test/
-msg.pb.*
-/config/config_*.yaml
