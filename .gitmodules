@@ -1,0 +1,3 @@
+[submodule "ThirdParty/mini-yaml"]
+	path = ThirdParty/mini-yaml
+	url = https://github.com/jimmiebergmann/mini-yaml.git
