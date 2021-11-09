@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 11)
 
 include(cmake/FindOpenCV.cmake)
 include (cmake/ROSConfig.cmake)
-include (cmake/ThirdPartyConfig.cmake)
+# include (cmake/ThirdPartyConfig.cmake)
 
 
 add_subdirectory(modules)
