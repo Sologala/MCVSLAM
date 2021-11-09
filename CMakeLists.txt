@@ -3,7 +3,8 @@ project(MCVSLAM VERSION 0.0.1)
 
 set(CMAKE_CXX_STANDARD 11)
 
-if (${CMAKE_SYSTEM_NAME} EQUAL "Darwin")
+
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     include(cmake/DarwinOpenCV.cmake)
 endif()
 
