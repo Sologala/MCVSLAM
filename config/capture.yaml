@@ -1,0 +1,11 @@
+Capture_cnt: 3
+Capture.fps: 20
+# Capture0.VideoPath: "/home/wen/HardDisk/VisDrone/SOT/VisDrone2018-SOT-test-dev/sequences/uav0000021_00000_s.mp4"
+Capture0.VideoPath: "/Users/wen/OSG_Data/left/*.png"
+Capture0.topic: "left/image"
+# Capture1.VideoPath: "/home/wen/HardDisk/VisDrone/SOT/VisDrone2018-SOT-test-dev/sequences/uav0000021_00000_s.mp4"
+Capture1.VideoPath: "/Users/wen/OSG_Data/right/*.png"
+Capture1.topic: "right/image"
+
+Capture2.VideoPath: "/Users/wen/OSG_Data/wide/*.png"
+Capture2.topic: "wide/image"

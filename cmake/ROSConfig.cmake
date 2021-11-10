@@ -7,6 +7,6 @@ find_package(catkin REQUIRED COMPONENTS
     std_msgs
 )
 
-
-set(ROS_INCLUDE_DIR  ${catkin_INCLUDE_DIRS})
-set(ROS_LIBS  ${catkin_LIBRARIES})
+# set(VAR ${catkin_INCLUDE_DIRS})
+set(ROS_INCLUDE_DIRS  "${catkin_INCLUDE_DIRS}")
+set(ROS_LIBS  "${catkin_LIBRARIES}")
