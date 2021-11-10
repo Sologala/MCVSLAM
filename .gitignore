@@ -5,7 +5,9 @@ out.*
 *.cache
 *.DS_Store
 *.vscode
+app
 
+third_repos
 # Prerequisites
 *.d
 
@@ -42,3 +44,5 @@ out.*
 *.out
 *.app
 .DS_Store
+app/*
+./app/
