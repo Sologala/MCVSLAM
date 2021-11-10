@@ -10,6 +10,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
+#include <string>
 #include <thread>
 
 #include "pyp/fmt/fmt.hpp"
@@ -95,6 +96,7 @@ void Capture::Init() {
 
 void CaptureConfig::Parse(const std::string &configPath) {
     {
+        fmt::print("{}\n", configPath);
         Yaml::Node fs;
         Yaml::Parse(fs, configPath);
         // cv::FileStorage fs(configPath, cv::FileStorage::READ);
