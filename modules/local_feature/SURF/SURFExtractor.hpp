@@ -19,7 +19,7 @@ class SURF : public MCVSLAM::BaseExtractor {
    public:
     SURF();
     ~SURF();
-    int Extract(const cv::Mat img, std::vector<cv::KeyPoint>& kps, cv::Mat& desps);
+    int Extract(const cv::Mat img, Keypoints& kps, Desps& desps);
 
     cv::Ptr<cv::xfeatures2d::SURF> pextractor;
     static SURF_Config global_SURF_config;

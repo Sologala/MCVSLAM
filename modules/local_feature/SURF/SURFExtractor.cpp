@@ -21,7 +21,7 @@ SURF::SURF() { pextractor = cv::xfeatures2d::SURF::create(700, 4, 3); }
 
 SURF::~SURF() {}
 
-int SURF::Extract(const cv::Mat img, std::vector<cv::KeyPoint>& kps, cv::Mat& desps) {
+int SURF::Extract(const cv::Mat img, Keypoints& kps, Desps& desps) {
     std::vector<int> lap = {0, 0};
     int cnt;
     try {
