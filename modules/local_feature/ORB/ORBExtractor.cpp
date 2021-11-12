@@ -24,7 +24,7 @@ ORB::ORB() {
 
 ORB::~ORB() { delete pextractor; }
 
-int ORB::Extract(const cv::Mat img, std::vector<cv::KeyPoint>& kps, cv::Mat& desps) {
+int ORB::Extract(const cv::Mat img, Keypoints& kps, Desps& desps) {
     std::vector<int> lap = {0, 0};
     int cnt;
     try {

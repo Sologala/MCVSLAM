@@ -16,7 +16,7 @@ class ORB : public MCVSLAM::BaseExtractor {
    public:
     ORB();
     ~ORB();
-    int Extract(const cv::Mat img, std::vector<cv::KeyPoint>& kps, cv::Mat& desps);
+    int Extract(const cv::Mat img, Keypoints& kps, Desps& desps);
     ORB_SLAM3::ORBextractor* pextractor = nullptr;
     static ORB_Config global_ORB_config;
 };
