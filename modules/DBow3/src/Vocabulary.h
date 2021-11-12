@@ -103,8 +103,7 @@ class DBOW_API Vocabulary {
      * factor nad the depth levels of the tree, and the weighting and scoring
      * schemes
      */
-    virtual void create(const std::vector<std::vector<cv::Mat> > &training_features, int k, int L, WeightingType weighting,
-                        ScoringType scoring);
+    virtual void create(const std::vector<std::vector<cv::Mat> > &training_features, int k, int L, WeightingType weighting, ScoringType scoring);
 
     /**
      * Returns the number of words in the vocabulary
