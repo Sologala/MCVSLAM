@@ -11,8 +11,10 @@
 #include <string>
 
 #include "capture.hpp"
+#include "multi_msg_wraper.hpp"
 #include "pyp/cmdline/cmdline.h"
 #include "pyp/fmt/fmt.hpp"
+#include "ros/publisher.h"
 #include "ros/time.h"
 using namespace cv;
 using namespace std;
@@ -22,8 +24,7 @@ int main(int argc, char **argv) {
     std::string configPath;
     std::string dataPath;
     cmdline::parser argPaser;
-    argPaser.add<string>("configPath", 'c', "config Path", false,
-                         "../config/capture.yaml");
+    argPaser.add<string>("configPath", 'c', "config Path", false, "../config/capture.yaml");
     argPaser.parse_check(argc, argv);
     configPath = argPaser.get<string>("configPath");
     printf("config path is %s\n", configPath.c_str());
@@ -31,11 +32,10 @@ int main(int argc, char **argv) {
 
     ros::init(argc, argv, "capture_publisher");
     ros::NodeHandle nh;
-    image_transport::ImageTransport it(nh);
 
     // 1. prepare capture
     std::vector<shared_ptr<Capture>> caps;
-    std::vector<image_transport::Publisher> pubs;
+    ros::Publisher pub = nh.advertise<multi_msgs::multi_images>(Capture::global_capture_config.topic, 1);
     int fps = Capture::global_capture_config.fps;
     for (int i = 0; i < Capture::global_capture_config.capture_cnt; i++) {
         const string dataPath = Capture::global_capture_config.caps[i].source;
@@ -48,25 +48,26 @@ int main(int argc, char **argv) {
         } else {
             caps.emplace_back(make_shared<Capture>(dataPath));
         }
-        pubs.emplace_back(
-            it.advertise(Capture::global_capture_config.caps[i].topic_name, 1));
     }
     //  publish topic
     ros::Rate loop_rate(fps);
     while (nh.ok()) {
         ros::Time time_stamp = ros::Time::now();
-
+        std::vector<cv::Mat> imgs;
         for (int i = 0; i < Capture::global_capture_config.capture_cnt; i++) {
-            auto publisher = pubs[i];
             cv::Mat img;
             bool res = caps[i]->get(img);
-
-            sensor_msgs::ImagePtr msg =
-                cv_bridge::CvImage(std_msgs::Header(), "bgr8", img)
-                    .toImageMsg();
-            msg->header.stamp = time_stamp;
-            publisher.publish(msg);
+            if (res) {
+                imgs.push_back(img);
+            }
         }
+
+        if (imgs.size() == Capture::global_capture_config.capture_cnt) {
+            multi_msgs::multi_images msg = MsgWraper::cvMats2rosMats(imgs);
+            msg.header.stamp = time_stamp;
+            pub.publish(msg);
+        }
+
         ros::spinOnce();
         loop_rate.sleep();
     }

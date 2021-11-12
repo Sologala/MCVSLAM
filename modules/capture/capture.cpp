@@ -17,8 +17,7 @@
 #include "pyp/yaml/yaml.hpp"
 // #include "pyp/yaml/yaml.hpp"
 using namespace std;
-MCVSLAM::CaptureConfig MCVSLAM::Capture::global_capture_config =
-    MCVSLAM::CaptureConfig();
+MCVSLAM::CaptureConfig MCVSLAM::Capture::global_capture_config = MCVSLAM::CaptureConfig();
 
 std::string GetFile_Extentions(const std::string file) {
     char *p = const_cast<char *>(file.c_str());
@@ -57,8 +56,7 @@ Capture::Capture(const std::string &_fileName) : file_name(_fileName) {
             mode = Work_Mode::VIDEO_FILE;
             cap = new cv::VideoCapture(_fileName);
             if (cap->isOpened() == false) {
-                cerr << " camera open file " << _fileName << "   faild "
-                     << endl;
+                cerr << " camera open file " << _fileName << "   faild " << endl;
                 exit(-1);
             }
         } else {
@@ -66,11 +64,9 @@ Capture::Capture(const std::string &_fileName) : file_name(_fileName) {
             img_paths.clear();
             string path = GetFile_Path(_fileName);
             path += ("/*." + ext);
-            printf("capture from path %s, %d imgs\n", path.c_str(),
-                   static_cast<int>(img_paths.size()));
+            printf("capture from path %s, %d imgs\n", path.c_str(), static_cast<int>(img_paths.size()));
             cv::glob(path, img_paths);
-            printf("capture from path %s, %d imgs\n", path.c_str(),
-                   static_cast<int>(img_paths.size()));
+            printf("capture from path %s, %d imgs\n", path.c_str(), static_cast<int>(img_paths.size()));
             sort(img_paths.begin(), img_paths.end());
         }
     } else {
@@ -92,6 +88,8 @@ void Capture::Init() {
     else if (mode == Work_Mode::PATH) {
         len = img_paths.size();
     }
+
+    len = max(1, int(len * global_capture_config.percent));
 }
 
 void CaptureConfig::Parse(const std::string &configPath) {
@@ -102,13 +100,14 @@ void CaptureConfig::Parse(const std::string &configPath) {
         // cv::FileStorage fs(configPath, cv::FileStorage::READ);
         capture_cnt = fs["Capture_cnt"].As<int>();
         fps = fs["Capture.fps"].As<int>();
+        topic = fs["Capture.topic"].As<string>();
+        percent = fs["Capture.percent"].As<double>();
         for (int i = 0; i < capture_cnt; i++) {
             std::string temp_source;
             std::string temp_key = "Capture" + to_string(i);
             std::string temp_topic_name;
             temp_source = fs[temp_key + ".VideoPath"].As<string>();
-            temp_topic_name = fs[temp_key + ".topic"].As<string>();
-            caps.push_back({temp_source, temp_topic_name});
+            caps.push_back({temp_source});
         }
     }
 }
@@ -131,6 +130,7 @@ Capture::~Capture() {
 
 bool Capture::get(cv::Mat &img) {
     timeStamp += 1;
+
     if (int(timeStamp) % len == 0 && mode == Work_Mode::VIDEO_FILE) {
         cap->release();
         cap->open(file_name);
@@ -148,8 +148,7 @@ bool Capture::get(cv::Mat &img) {
     } else if (mode == Work_Mode::PATH) {
         img = cv::imread(img_paths[img_path_idx]);
         if (img.empty()) {
-            fmt::print("capture image from file {} Faild\n",
-                       img_paths[img_path_idx]);
+            fmt::print("capture image from file {} Faild\n", img_paths[img_path_idx]);
             return false;
         }
         img_path_idx++;

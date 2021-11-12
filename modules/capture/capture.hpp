@@ -40,12 +40,13 @@ class CaptureConfig {
    public:
     struct capture_info {
         std::string source;
-        std::string topic_name;
     };
     void Parse(const std::string &configPath);
 
     int fps;
     int capture_cnt;
+    double percent;
+    std::string topic;
     std::vector<capture_info> caps;
 };
 
