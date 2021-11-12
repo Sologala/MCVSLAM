@@ -7,12 +7,14 @@
 #pragma once
 namespace MCVSLAM {
 class ExtractorConfig;
+using Keypoints = std::vector<cv::KeyPoint>;
+using Desps = cv::Mat;
 
 class BaseExtractor {
    public:
     BaseExtractor(){};
     virtual ~BaseExtractor(){};
-    virtual int Extract(const cv::Mat img, std::vector<cv::KeyPoint>& kps, cv::Mat& desps) = 0;
+    virtual int Extract(const cv::Mat img, Keypoints& kps, Desps& desps) = 0;
 };
 
 class ExtractorConfig {
