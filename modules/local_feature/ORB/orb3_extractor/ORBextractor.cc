@@ -397,6 +397,10 @@ static int bit_pattern_31_[256 * 4] = {
 
 ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels, int _iniThFAST, int _minThFAST)
     : nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels), iniThFAST(_iniThFAST), minThFAST(_minThFAST) {
+    init(_nfeatures, _scaleFactor, _nlevels, _iniThFAST, _minThFAST);
+}
+
+void ORBextractor::init(int nfeatures, float scaleFactor, int nlevels, int iniThFAST, int minThFAST){
     mvScaleFactor.resize(nlevels);
     mvLevelSigma2.resize(nlevels);
     mvScaleFactor[0] = 1.0f;
@@ -447,6 +451,7 @@ ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels, int
         ++v0;
     }
 }
+
 
 static void computeOrientation(const Mat& image, vector<KeyPoint>& keypoints, const vector<int>& umax) {
     for (vector<KeyPoint>::iterator keypoint = keypoints.begin(), keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint) {

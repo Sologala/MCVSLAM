@@ -7,22 +7,22 @@
 #include "orb3_extractor/ORBextractor.h"
 namespace MCVSLAM {
 
-ORB_Config ORB::global_ORB_config = ORB_Config();
 
-void ORB_Config::Parse(const std::string& config_file) {
+void ORB::Parse(const std::string& config_file) {
     Yaml::Node root;
     Yaml::Parse(root, config_file);
-    ExtractorConfig::Parse(root);
+    nfeatures = root["nkeypoints"].As<int>();
     iniThFAST = root["ORBextractor.iniThFAST"].As<int>();
     minThFAST = root["ORBextractor.minThFAST"].As<int>();
 }
 
-ORB::ORB() {
-    pextractor = new ORB_SLAM3::ORBextractor(global_ORB_config.nkeypoints, global_ORB_config.scale_factor, global_ORB_config.nlevels,
-                                             global_ORB_config.iniThFAST, global_ORB_config.minThFAST);
+ORB::ORB(const std::string& config_path) 
+{
+    Parse(config_path);
+    init(nfeatures, scaleFactor, nlevels, iniThFAST, minThFAST);
 }
 
-ORB::~ORB() { delete pextractor; }
+ORB::~ORB() {}
 
 int ORB::Extract(const cv::Mat img, Keypoints& kps, Desps& desps) {
     std::vector<int> lap = {0, 0};

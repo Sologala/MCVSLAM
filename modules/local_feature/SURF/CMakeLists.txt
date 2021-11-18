@@ -3,9 +3,11 @@ add_library(
     SURF STATIC
     ./SURFExtractor.cpp
 )
+
 target_include_directories(
-    SURF PRIVATE
+    ORB PUBLIC
     ./
+    ../BaseExtractor
 )
 target_link_libraries(
     SURF

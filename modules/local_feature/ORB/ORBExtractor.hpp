@@ -5,20 +5,15 @@
 #include "orb3_extractor/ORBextractor.h"
 namespace MCVSLAM {
 
-class ORB_Config : public ExtractorConfig {
+class ORB : public MCVSLAM::BaseExtractor , public ORB_SLAM3::ORBextractor{
    public:
-    void Parse(const std::string& config_file);
-    int iniThFAST;
-    int minThFAST;
-};
-
-class ORB : public MCVSLAM::BaseExtractor {
-   public:
-    ORB();
+    ORB(const std::string& config_path);
     ~ORB();
+    
     int Extract(const cv::Mat img, Keypoints& kps, Desps& desps);
+    private:
     ORB_SLAM3::ORBextractor* pextractor = nullptr;
-    static ORB_Config global_ORB_config;
+    void Parse(const std::string& config_file);
 };
 
 }  // namespace MCVSLAM
