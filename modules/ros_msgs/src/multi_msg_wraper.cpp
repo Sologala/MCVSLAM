@@ -1,6 +1,7 @@
 #include "multi_msg_wraper.hpp"
 
 #include "cv_bridge/cv_bridge.h"
+#include "sensor_msgs/Image.h"
 
 namespace MCVSLAM {
 std::vector<cv::Mat> MsgWraper::rosMats2cvMats(const multi_msgs::multi_images &multi_msg) {
@@ -21,6 +22,16 @@ multi_msgs::multi_images MsgWraper::cvMats2rosMats(const std::vector<cv::Mat> &i
         msg.imgs.push_back(*img_msg.toImageMsg());
     }
     return msg;
+}
+
+const sensor_msgs::ImageConstPtr MsgWraper::cvMat2rosMat(const cv::Mat &img) {
+    cv_bridge::CvImage img_msg(std_msgs::Header(), "bgr8", img);
+    return img_msg.toImageMsg();
+}
+
+cv::Mat MsgWraper::rosMat2cvMat(const sensor_msgs::ImageConstPtr &msg) {
+    cv::Mat img = cv_bridge::toCvCopy(msg, "bgr8")->image;
+    return img;
 }
 
 }  // namespace MCVSLAM
