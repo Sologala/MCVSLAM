@@ -100,14 +100,14 @@ void CaptureConfig::Parse(const std::string &configPath) {
         // cv::FileStorage fs(configPath, cv::FileStorage::READ);
         capture_cnt = fs["Capture_cnt"].As<int>();
         fps = fs["Capture.fps"].As<int>();
-        topic = fs["Capture.topic"].As<string>();
         percent = fs["Capture.percent"].As<double>();
         for (int i = 0; i < capture_cnt; i++) {
             std::string temp_source;
             std::string temp_key = "Capture" + to_string(i);
             std::string temp_topic_name;
             temp_source = fs[temp_key + ".VideoPath"].As<string>();
-            caps.push_back({temp_source});
+            temp_topic_name = fs[temp_key + ".topic"].As<string>();
+            caps.push_back({temp_source, temp_topic_name});
         }
     }
 }
