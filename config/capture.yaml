@@ -3,10 +3,10 @@ Capture.fps: 2
 Capture.topic: "multi/image"
 Capture.percent: 0.001
 Capture0.VideoPath: "/home/wen/SLAM/Datasets/data/left/1610443311331890616.png"
-# Capture0.topic: "left/image"
+Capture0.topic: "left/image"
 # Capture1.VideoPath: "/home/wen/HardDisk/VisDrone/SOT/VisDrone2018-SOT-test-dev/sequences/uav0000021_00000_s.mp4"
 Capture1.VideoPath: "/home/wen/SLAM/Datasets/data/right/1610443311331890616.png"
-# Capture1.topic: "right/image"
+Capture1.topic: "right/image"
 
 Capture2.VideoPath: "/home/wen/SLAM/Datasets/data/wide/1610443311331890616.png"
-# Capture2.topic: "wide/image"
+Capture2.topic: "wide/image"
