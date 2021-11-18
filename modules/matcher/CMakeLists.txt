@@ -1,5 +1,5 @@
-add_library(matcher
-./Matcher.cpp
+add_library(matcher STATIC
+./Matcher.cpp 
 )
 target_include_directories(
     matcher PUBLIC
