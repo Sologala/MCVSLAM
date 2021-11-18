@@ -12,7 +12,7 @@ SET (SRCS
     )
 
 add_library(
-    Dbow3
+    Dbow3 STATIC
     ${SRCS}
 )
 
