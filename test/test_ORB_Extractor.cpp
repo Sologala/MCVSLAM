@@ -1,5 +1,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
 #include <ros/ros.h>
 
 #include <iostream>
@@ -46,11 +48,12 @@ void test(std::vector<cv::Mat> imgs) {
     cv::waitKey(10);
 }
 
-void imageCallback(const multi_msgs::multi_imagesConstPtr &msg) {
+void imageCallback(const sensor_msgs::ImageConstPtr &img_left, const sensor_msgs::ImageConstPtr &img_right,
+                   const sensor_msgs::ImageConstPtr &img_wide) {
     try {
         // cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
-        const std::vector<cv::Mat> imgs = MsgWraper::rosMats2cvMats(*msg);
-        double time_stamp = msg->header.stamp.toSec();
+        std::vector<cv::Mat> imgs = {MsgWraper::rosMat2cvMat(img_left), MsgWraper::rosMat2cvMat(img_right), MsgWraper::rosMat2cvMat(img_wide)};
+        double time_stamp = img_left->header.stamp.toSec();
         // test_performance(img);
         test(imgs);
     } catch (cv_bridge::Exception &e) {
@@ -63,16 +66,18 @@ int main(int argc, char **argv) {
         number_kps.push_back(i);
     }
     Capture::global_capture_config.Parse("../config/capture.yaml");
-    ORB::global_ORB_config.Parse("../config/extractor.yaml");
-    extractor = new ORB();
+    extractor = new ORB("../config/extractor.yaml");
     // extractor = new SURF();
 
     ros::init(argc, argv, "test_node_orb_extractor");
 
     ros::NodeHandle nh;
-    auto sub = nh.subscribe<multi_msgs::multi_images>(Capture::global_capture_config.topic, 1, imageCallback);
-    // image_transport::Subscriber sub = it.subscribe("left/image", 1, imageCallback);
-    //  pub = it.advertise(PedDet::global_config::gcfg.topic_oup_detection_result,);
+    message_filters::Subscriber<sensor_msgs::Image> sub_left(nh, Capture::global_capture_config.caps[0].topic, 1);
+    message_filters::Subscriber<sensor_msgs::Image> sub_right(nh, Capture::global_capture_config.caps[1].topic, 1);
+    message_filters::Subscriber<sensor_msgs::Image> sub_wide(nh, Capture::global_capture_config.caps[2].topic, 1);
+    message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> sync(sub_left, sub_right, sub_wide, 10);
+    sync.registerCallback(boost::bind(&imageCallback, _1, _2, _3));
+
     ros::spin();
     ros::shutdown();
     return 0;
