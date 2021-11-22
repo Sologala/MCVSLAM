@@ -42,12 +42,10 @@ class ORBextractor {
     enum { HARRIS_SCORE = 0, FAST_SCORE = 1 };
     ORBextractor(){};
     ORBextractor(int nfeatures, float scaleFactor, int nlevels, int iniThFAST, int minThFAST);
-    
+
     ~ORBextractor() {}
 
     void init(int nfeatures, float scaleFactor, int nlevels, int iniThFAST, int minThFAST);
-
-    
 
     // Compute the ORB features and descriptors on an image.
     // ORB are dispersed on the image using an octree.
@@ -79,7 +77,7 @@ class ORBextractor {
     std::vector<cv::Point> pattern;
 
     int nfeatures;
-    double scaleFactor;
+    float scaleFactor;
     int nlevels;
     int iniThFAST;
     int minThFAST;
@@ -87,7 +85,8 @@ class ORBextractor {
     std::vector<int> mnFeaturesPerLevel;
 
     std::vector<int> umax;
-public:
+
+   public:
     std::vector<float> mvScaleFactor;
     std::vector<float> mvInvScaleFactor;
     std::vector<float> mvLevelSigma2;

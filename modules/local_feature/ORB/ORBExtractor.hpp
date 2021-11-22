@@ -5,14 +5,14 @@
 #include "orb3_extractor/ORBextractor.h"
 namespace MCVSLAM {
 
-class ORB : public MCVSLAM::BaseExtractor , public ORB_SLAM3::ORBextractor{
+class ORB : public MCVSLAM::BaseExtractor, public ORB_SLAM3::ORBextractor {
    public:
     ORB(const std::string& config_path);
     ~ORB();
-    
+
     int Extract(const cv::Mat img, Keypoints& kps, Desps& desps);
-    private:
-    ORB_SLAM3::ORBextractor* pextractor = nullptr;
+
+   private:
     void Parse(const std::string& config_file);
 };
 
