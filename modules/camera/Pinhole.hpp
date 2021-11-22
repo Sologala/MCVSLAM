@@ -18,19 +18,20 @@
 
 #ifndef CAMERAMODELS_Pinhole_H
 #define CAMERAMODELS_Pinhole_H
-#include "BaseCamera.hpp"
 #include <Eigen/Geometry>
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+
+#include "BaseCamera.hpp"
 namespace MCVSLAM {
 
 enum CAM_NAME { L = 0, R = 1, W = 2 };
 
 class Pinhole : public BaseCamera {
    public:
-    Pinhole(const std::vector<float> &_vParameters, cv::Mat _distCoef) : BaseCamera(_vParameters, _distCoef){
-    }
+    Pinhole(const std::string &config_file);
+    Pinhole(const std::vector<float> &_vParameters, cv::Mat _distCoef) : BaseCamera(_vParameters, _distCoef) {}
     ~Pinhole() {}
 
     cv::Point2f project(const cv::Point3f &p3D);
@@ -47,7 +48,6 @@ class Pinhole : public BaseCamera {
     Eigen::Matrix<double, 2, 3> projectJac(const Eigen::Vector3d &v3D);
 
     cv::Mat unprojectJac(const cv::Point2f &p2D);
-
 };
 }  // namespace MCVSLAM
 

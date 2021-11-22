@@ -21,7 +21,30 @@
 
 #include "Pinhole.hpp"
 
+#include <opencv2/core/hal/interface.h>
+
+#include "BaseCamera.hpp"
+#include "pyp/yaml/yaml.hpp"
 namespace MCVSLAM {
+
+Pinhole::Pinhole(const std::string &config_file) : BaseCamera() {
+    Yaml::Node root;
+    Yaml::Parse(root, config_file);
+    parameters = root["intrisic"].AsVector<float>();
+    std::vector<float> vK = root["K"].AsVector<float>();
+    assert(vK.size() == 4);
+    K = cv::Mat::eye(3, 3, CV_32F);
+    K.at<float>(0, 0) = vK[0];
+    K.at<float>(1, 1) = vK[1];
+    K.at<float>(0, 2) = vK[2];
+    K.at<float>(1, 2) = vK[3];
+    std::cout << K << std::endl;
+    std::vector<float> vDist = root["distort"].AsVector<float>();
+    assert(vDist.size() == 5);
+    dist = cv::Mat(vDist).reshape(0, 1).clone();
+    std::cout << dist << std::endl;
+}
+
 cv::Point2f Pinhole::project(const cv::Point3f &p3D) {
     return cv::Point2f(parameters[0] * p3D.x / p3D.z + parameters[2], parameters[1] * p3D.y / p3D.z + parameters[3]);
 }
