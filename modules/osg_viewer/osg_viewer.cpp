@@ -1,5 +1,11 @@
 #include "osg_viewer.hpp"
 
+#include <algorithm>
+#include <boost/thread/lock_types.hpp>
+#include <boost/thread/pthread/mutex.hpp>
+#include <memory>
+#include <opencv2/core.hpp>
+#include <opencv2/core/matx.hpp>
 #include <opencv2/core/types.hpp>
 #include <opencv2/opencv.hpp>
 #include <osg/Camera>
@@ -12,25 +18,104 @@
 #include <osg/LineWidth>
 #include <osg/Matrix>
 #include <osg/MatrixTransform>
+#include <osg/Matrixd>
 #include <osg/Node>
 #include <osg/NodeVisitor>
+#include <osg/Point>
 #include <osg/ShapeDrawable>
+#include <osg/Transform>
+#include <osg/Vec3>
 #include <osg/ref_ptr>
 #include <osgDB/ReadFile>
+#include <osgGA/TrackballManipulator>
 #include <osgText/Text>
 #include <osgViewer/Scene>
 #include <osgViewer/Viewer>
 
+#include "osg_follower.hpp"
 #include "pyp/yaml/yaml.hpp"
+
 using namespace std;
 
-osg_viewer::~osg_viewer() {}
-osg::ref_ptr<osg::Node> osg_viewer::CreateCameraNode() {
+void osg_viewer::Run() {
+    is_commited = false;
+    is_request_stop = false;
+    is_stoped = false;
+    // clear node_cloud_points when launch threads.
+
+    while (1) {
+        viewer->frame();
+        float x = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[0];
+        float y = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[1];
+        float z = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[2];
+
+        // cout << x << " " << y << " " << z << endl;
+        {
+            boost::unique_lock<boost::mutex> lock(mtx);
+            if (is_request_stop) {
+                break;
+            }
+        }
+    }
+    {  // set stop
+        boost::unique_lock<boost::mutex> lock(mtx);
+        is_stoped = true;
+    }
+}
+
+// input cv::Mat mps must be float
+void osg_viewer::Draw(const cv::Mat mps, uint r, uint g, uint b) {
+    // create vertex array and colors
+    osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
+    osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
+    pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
+    osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
+    osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
+    osg::ref_ptr<osg::Vec3Array> colors = new osg::Vec3Array();
+    for (int i = 0, sz = mps.rows; i < sz; i++) {
+        const cv::Point3f *ptr = mps.ptr<cv::Point3f>(i);
+        v->push_back(osg::Vec3(ptr->x, ptr->y, ptr->z));
+        colors->push_back(osg::Vec3(r, g, b));
+    }
+    geom->setVertexArray(v);
+    geom->setColorArray(colors);
+    geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));  // X
+    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
+    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    geode->getOrCreateStateSet()->setAttribute(new osg::Point(mappoint_size), osg::StateAttribute::ON);
+    geode->addDrawable(pShapeDrawable.get());
+    geode->addDrawable(geom.get());
+    draw_buffer[draw_idx]->addChild(geode);
+}
+
+void osg_viewer::Commit() {
+    {
+        boost::unique_lock<boost::mutex> lock(mtx_commit);
+        points_cams->removeChildren(0, points_cams->getNumChildren());
+        points_cams->addChild(draw_buffer[draw_idx]);
+        show_idx = draw_idx;
+        draw_idx = (draw_idx + 1) % 2;
+        draw_buffer[draw_idx]->removeChild(0, draw_buffer[draw_idx]->getNumChildren());
+    }
+}
+
+bool osg_viewer::IsStoped() {
+    boost::unique_lock<boost::mutex> lock(mtx);
+    return is_stoped;
+}
+
+void osg_viewer::RequestStop() {
+    boost::unique_lock<boost::mutex> lock(mtx);
+    is_request_stop = true;
+}
+
+void osg_viewer::DrawCam(cv::Mat Twc, uint r, uint g, uint b) {
     osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
     osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
     pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
 
-    const float &w = 2;
+    const float &w = camera_width;
     const float h = w * 0.75;
     const float z = -w * 0.6;
     //创建保存几何信息的对象
@@ -76,11 +161,19 @@ osg::ref_ptr<osg::Node> osg_viewer::CreateCameraNode() {
 
     osg::ref_ptr<osg::Geode> geode = new osg::Geode();
     geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.0), osg::StateAttribute::ON);
+    geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.), osg::StateAttribute::ON);
     geode->addDrawable(pShapeDrawable.get());
     geode->addDrawable(geom.get());
-    return geode.release();
+
+    osg::ref_ptr<osg::MatrixTransform> trans = new osg::MatrixTransform();
+    osg::Matrixd t = osg::Matrixd::translate(0, 0, 100);
+    cv::transpose(Twc, Twc);
+    osg::Matrixd mat(Twc.ptr<float>());
+    trans->addChild(geode);
+    trans->setMatrix(mat);
+    draw_buffer[draw_idx]->addChild(trans);
 }
+
 osg::ref_ptr<osg::Node> osg_viewer::CreateCoordinate() {
     osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
     osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
@@ -154,18 +247,25 @@ void osg_viewer::Parse(std::string config_file) {
     Yaml::Node fs;
     Yaml::Parse(fs, config_file);
     model_path = fs["model_path"].As<std::string>();
-    camera_width = fs["camera_width"].As<int>();
-    mappoint_size = fs["mappoint_size"].As<int>();
-    keyframe_size = fs["keyframe_size"].As<int>();
+    mappoint_size = fs["mappoint_size"].As<float>();
+    camera_width = fs["camera_width"].As<float>();
     is_show_model = fs["is_show_model"].As<bool>();
     wnd_rect = cv::Rect(fs["window_x"].As<int>(), fs["window_y"].As<int>(), fs["window_width"].As<int>(), fs["window_height"].As<int>());
 }
 osg_viewer::osg_viewer(const std::string &config_file) {
+    draw_buffer[0] = new osg::Group();
+    draw_buffer[1] = new osg::Group();
+    points_cams = new osg::Group();
     Parse(config_file);
-    node_camera = CreateCameraNode();
-    if (is_show_model) node_environment = osgDB::readRefNodeFile(model_path);
-
-    // set windows configuration
+    node_environment = new osg::Group();
+    if (is_show_model) {
+        osg::ref_ptr<osg::Node> model = osgDB::readRefNodeFile(model_path);
+        osg::Vec3 vcenter = model->getBound().center();
+        osg::ref_ptr<osg::MatrixTransform> tf = new osg::MatrixTransform();
+        tf->setMatrix(osg::Matrix::translate(-osg::Vec3(0, 0, vcenter[2] - 30)) * osg::Matrix::translate(+74.456245, -69.976059, -49.972599));
+        tf->addChild(model);
+        node_environment->addChild(tf);
+    }
 
     // Create viewer
     viewer = new osgViewer::Viewer();
@@ -175,11 +275,21 @@ osg_viewer::osg_viewer(const std::string &config_file) {
 
     // Add model to viewer
     scene = new osg::Group;
-    scene->addChild(node_camera);
+
     scene->addChild(CreateCoordinate());
-    if (is_show_model) scene->addChild(node_environment);
+    if (is_show_model) {
+        scene->addChild(node_environment);
+    }
+
+    // create points and cams
+    scene->addChild(points_cams);
+
     viewer->setUpViewInWindow(wnd_rect.x, wnd_rect.y, wnd_rect.width, wnd_rect.height);
-    // viewer->setCameraManipulator(new osgGA::TrackballManipulator);
+    // viewer->setCameraManipulator(nullptr);
     viewer->setSceneData(scene);
     viewer->realize();
+    std::shared_ptr<osg::Matrixd> cam_pose = make_shared<osg::Matrixd>();
+    osg::ref_ptr<Follow> follower = new Follow(cam_pose);
+    viewer->setCameraManipulator(follower);
 }
+osg_viewer::~osg_viewer() {}

@@ -65,6 +65,7 @@ ${ROS_INCLUDE_DIRS}
 target_link_libraries(osg_camera_draw
     ${ALL_LIBS}
     ${ROS_LIBS}
+    osg_viewer
 )
     
 
