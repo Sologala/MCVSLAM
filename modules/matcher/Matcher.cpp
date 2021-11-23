@@ -9,6 +9,7 @@
 #include <opencv2/core/base.hpp>
 #include <opencv2/core/types.hpp>
 #include <opencv2/features2d.hpp>
+#include <opencv2/xfeatures2d.hpp>
 #include <queue>
 #include <stdexcept>
 #include <utility>
@@ -46,6 +47,13 @@ MatchRes& MatchRes::FilterThreshold(const int thres_hold) {
     return (*this);
 }
 
+MatchRes& MatchRes::Filter_GMS(const cv::Size sz1, const cv::Size sz2, const Keypoints& kps1, const Keypoints& kps2, uint threshold) {
+    MatchRes ret;
+    cv::xfeatures2d::matchGMS(sz1, sz2, kps1, kps2, *this, ret, false, false, threshold);
+    *this = ret;
+    return *this;
+}
+
 MatchRes MatchResKnn::FilterRatio(const float ratio) {
     MatchRes res;
     for (auto v_match : (*this)) {
@@ -77,16 +85,9 @@ Matcher& Matcher::GetInstance(MATCH_DISTANCE _dis_mode) {
     }
 }
 
-MatchRes Matcher::Match(cv::InputArray desp1, cv::InputArray desp2) {
-    MatchRes res;
-    Get_BF_Matcher(this->dis_mode)->match(desp1, desp2, res);
-    return res;
-}
-
-MatchResKnn Matcher::KnnMatch(cv::InputArray desp1, cv::InputArray desp2, int k) {
+MatchResKnn Matcher::KnnMatch_cv(cv::InputArray desp1, cv::InputArray desp2, int k) {
     MatchResKnn res;
-    cv::Mat mask(desp1.rows(), desp2.rows(), CV_8UC1);
-    Get_BF_Matcher(this->dis_mode)->knnMatch(desp1, desp2, res, k);
+    Get_BF_Matcher(MATCH_DISTANCE::HAMMING)->knnMatch(desp1, desp2, res, k);
     return res;
 }
 
@@ -111,23 +112,46 @@ class LoopBody : public cv::ParallelLoopBody {
         : desp1(_desp1), desp2(_desp2), res(res_), k(k) {}
 
     virtual void operator()(const cv::Range& r) const {
-        for (int i = r.start; i != r.end; i++)  //遍历
-        {
-            cv::Mat desp = desp1[i];
-            priority_queue<pair<uint, uint>> heap;  // top element is bigest.
-            for (int j = 0, szj = desp2.size(); j < szj; j++) {
-                uint dist = HammingDistance(desp, desp2[j]);
-                if (heap.empty() || dist < heap.top().first) {
-                    heap.push(make_pair(dist, j));
+        if (k != 2) {
+            for (int i = r.start; i != r.end; i++)  //遍历
+            {
+                cv::Mat desp = desp1[i];
+                priority_queue<pair<uint, uint>> heap;  // top element is bigest.
+                for (int j = 0, szj = desp2.size(); j < szj; j++) {
+                    uint dist = HammingDistance(desp, desp2[j]);
+                    if (heap.empty() || dist < heap.top().first) {
+                        heap.push(make_pair(dist, j));
+                    }
+                    if (heap.size() > k) {
+                        heap.pop();
+                    }
                 }
-                if (heap.size() > k) {
+                for (int j = k - 1; j >= 0; j--) {
+                    pair<uint, uint> temp = heap.top();
                     heap.pop();
+                    res[i][j] = cv::DMatch(i, temp.second, temp.first);
                 }
             }
-            for (int j = k - 1; j >= 0; j--) {
-                pair<uint, uint> temp = heap.top();
-                heap.pop();
-                res[i][j] = cv::DMatch(i, temp.second, temp.first);
+        } else {
+            for (int i = r.start; i != r.end; i++)  //遍历
+            {
+                cv::Mat desp = desp1[i];
+                uint d[2] = {999, 999};
+                uint d_idx[2] = {0, 0};
+                for (int j = 0, szj = desp2.size(); j < szj; j++) {
+                    uint dist = HammingDistance(desp, desp2[j]);
+                    if (dist < d[0]) {
+                        d[1] = d[0];
+                        d_idx[1] = d_idx[0];
+                        d[0] = dist;
+                        d_idx[0] = j;
+                    } else if (dist < d[1]) {
+                        d[1] = dist;
+                        d_idx[1] = j;
+                    }
+                }
+                res[i][0] = cv::DMatch(i, d_idx[0], d[0]);
+                res[i][1] = cv::DMatch(i, d_idx[1], d[1]);
             }
         }
     }
@@ -138,12 +162,20 @@ class LoopBody : public cv::ParallelLoopBody {
     std::vector<std::vector<cv::DMatch>>& res;
     int k = 0;
 };
-MatchResKnn Matcher::KnnMatch_(const std::vector<cv::Mat>& desp1, const std::vector<cv::Mat>& desp2, int k, uint n_threads) {
-    assert(desp2.size() >= k && desp1.size());
+
+MatchResKnn Matcher::KnnMatch(const std::vector<cv::Mat>& desp1, const std::vector<cv::Mat>& desp2, int k, uint n_threads) {
+    assert(desp1.size());
+    k = min(static_cast<int>(desp2.size()), k);
     MatchResKnn ret;
     ret.resize(desp1.size(), std::vector<cv::DMatch>(k));
-    LoopBody body(desp1, desp2, ret, 2);
+    LoopBody body(desp1, desp2, ret, k);
     cv::parallel_for_(cv::Range(0, static_cast<int>(desp1.size())), body);  //启动
     return ret;
+}
+
+MatchResKnn Matcher::KnnMatch(const cv::Mat& desp1, const cv::Mat& desp2, int k, uint n_threads) {
+    MatchResKnn res;
+    Get_BF_Matcher(MATCH_DISTANCE::HAMMING)->knnMatch(desp1, desp2, res, k);
+    return res;
 }
 }  // namespace MCVSLAM
