@@ -17,7 +17,7 @@ using namespace std;
 
 namespace MCVSLAM {
 
-int HammingDistance(const cv::Mat& a, const cv::Mat& b) {
+inline int HammingDistance(const cv::Mat& a, const cv::Mat& b) {
     const int* pa = a.ptr<int32_t>();
     const int* pb = b.ptr<int32_t>();
 
@@ -31,7 +31,6 @@ int HammingDistance(const cv::Mat& a, const cv::Mat& b) {
     }
 
     return dist;
-    // ----------------use the keypoint net feature
 }
 
 MatchRes& MatchRes::FilterThreshold(const int thres_hold) {
@@ -56,7 +55,7 @@ MatchRes& MatchRes::Filter_GMS(const cv::Size sz1, const cv::Size sz2, const Key
 
 MatchRes MatchResKnn::FilterRatio(const float ratio) {
     MatchRes res;
-    for (auto v_match : (*this)) {
+    for (const auto& v_match : (*this)) {
         if (v_match[0].distance / v_match[1].distance <= ratio) {
             res.push_back(v_match[0]);
         }
@@ -96,7 +95,7 @@ std::vector<cv::DMatch> Matcher::BFMatch(const Keypoints& kp1, const Desps& desp
     Get_BF_Matcher(this->dis_mode)->knnMatch(desp1, desp2, res, 2);
     // filter_out:
     std::vector<cv::DMatch> good_res;
-    for (auto v_match : res) {
+    for (const auto& v_match : res) {
         if (v_match[0].distance / v_match[1].distance < 0.6) {
             good_res.push_back(v_match[0]);
         }

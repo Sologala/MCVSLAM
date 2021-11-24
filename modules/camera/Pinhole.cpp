@@ -30,14 +30,11 @@ namespace MCVSLAM {
 Pinhole::Pinhole(const std::string &config_file) : BaseCamera() {
     Yaml::Node root;
     Yaml::Parse(root, config_file);
+    // parameters = root["intrisic"].AsVector<float>();
     parameters = root["intrisic"].AsVector<float>();
-    std::vector<float> vK = root["K"].AsVector<float>();
-    assert(vK.size() == 4);
-    K = cv::Mat::eye(3, 3, CV_32F);
-    K.at<float>(0, 0) = vK[0];
-    K.at<float>(1, 1) = vK[1];
-    K.at<float>(0, 2) = vK[2];
-    K.at<float>(1, 2) = vK[3];
+    parameters.push_back(1.0 / parameters[FX]);
+    parameters.push_back(1.0 / parameters[FY]);
+    K = (cv::Mat_<float>(3, 3) << parameters[0], 0.f, parameters[2], 0.f, parameters[1], parameters[3], 0.f, 0.f, 1.f);
     std::cout << K << std::endl;
     std::vector<float> vDist = root["distort"].AsVector<float>();
     assert(vDist.size() == 5);

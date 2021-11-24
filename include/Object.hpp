@@ -3,8 +3,9 @@
 #include <boost/thread.hpp>
 #include <boost/thread/pthread/mutex.hpp>
 #include <vector>
-#include "BaseExtractor.hpp"
+
 #include "BaseCamera.hpp"
+#include "BaseExtractor.hpp"
 #include "MapPoint.hpp"
 #include "Pinhole.hpp"
 #include "pyp/fmt/fmt.hpp"
@@ -28,7 +29,7 @@ class Object {
     Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img);
 
     // ---------------------[Statistic] ----------------------
-    size_t size() { return N; }
+    size_t size() const { return kps.size(); }
 
     // ---------------------[Pose] ----------------------
     // Set the camera pose. (Imu pose is not modified!)
@@ -91,7 +92,7 @@ class Object {
         return true;
     }
     bool count(size_t idx) {
-        if (idx < 0 || idx >= N) return false;
+        if (idx < 0 || idx >= size()) return false;
         UNIQUELOCK lock(mtxMapPoints);
         if (mIDX2MP.count(idx) == 0) return false;
         return true;
@@ -126,7 +127,7 @@ class Object {
 
     MapPointRef GetMapPoint(size_t idx) {
         UNIQUELOCK lock(mtxMapPoints);
-        if (idx >= N || mIDX2MP.count(idx) == 0) return NULL;
+        if (idx >= size() || mIDX2MP.count(idx) == 0) return NULL;
         //	data_check();
 
         MapPointRef pMP = mIDX2MP[idx];
@@ -135,10 +136,10 @@ class Object {
     }
 
     void AddMapPoint(MapPointRef pMP, size_t idx) {
-        if (idx >= N || pMP == NULL) return;
+        if (idx >= size() || pMP == NULL) return;
         {
             UNIQUELOCK lock(mtxMapPoints);
-            if (mMP2IDX.count(pMP) || mIDX2MP.count(idx)){
+            if (mMP2IDX.count(pMP) || mIDX2MP.count(idx)) {
                 // double delete for force guaranty
                 DelMapPoint(pMP);
                 DelMapPoint(idx);
@@ -162,7 +163,7 @@ class Object {
     }
 
     void DelMapPoint(size_t idx) {
-        if (idx >= N) return;
+        if (idx >= size()) return;
         UNIQUELOCK lock(mtxMapPoints);
         // std::unique_lock<std::mutex> lock(mtxMapPoints);
         if (mIDX2MP.count(idx) == 0) return;
@@ -207,7 +208,6 @@ class Object {
 
    public:
     CAM_NAME name;
-    int N;
     BaseCamera *mpCam;
     cv::Mat img;
 
@@ -218,6 +218,7 @@ class Object {
 
     std::vector<size_t> idxs;
     std::vector<MapPointRef> MPs;
+
    private:
     Grid grid;
     float grid_width_inv;

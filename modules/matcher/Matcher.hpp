@@ -11,11 +11,12 @@
 namespace MCVSLAM {
 enum MATCH_DISTANCE { HAMMING = 0, COS = 1, NORM2 = 2 };
 
-static int HammingDistance(const cv::Mat& a, const cv::Mat& b);
+static inline int HammingDistance(const cv::Mat& a, const cv::Mat& b);
 
 class MatchRes : public std::vector<cv::DMatch> {
    public:
     MatchRes& FilterThreshold(const int thres_hold = 64);
+    MatchRes& Filter_GMS(const cv::Size sz1, const cv::Size sz2, const Keypoints& kps1, const Keypoints& kps2, uint threshold = 6.f);
 };
 class MatchResKnn : public std::vector<std::vector<cv::DMatch>> {
    public:
@@ -31,13 +32,14 @@ class Matcher {
     ~Matcher(){};
 
    public:
-    MatchRes Match(cv::InputArray desp1, cv::InputArray desp2);
-    MatchResKnn KnnMatch(cv::InputArray desp1, cv::InputArray desp2, int k = 2);
+    // MatchRes Match(cv::InputArray desp1, cv::InputArray desp2);
+    static MatchResKnn KnnMatch_cv(cv::InputArray desp1, cv::InputArray desp2, int k = 2);
 
     std::vector<cv::DMatch> BFMatch(const Keypoints& kp1, const Desps& desp1, const Keypoints& kp2, const Desps& desp2);
     std::vector<cv::DMatch> DBowMatch(const Keypoints& kp1, const Desps& desp1, const Keypoints& kp2, const Desps& desp2);
 
-    static MatchResKnn KnnMatch_(const std::vector<cv::Mat>& desp1, const std::vector<cv::Mat>& desp2, int k = 2, uint n_threads = 0);
+    static MatchResKnn KnnMatch(const std::vector<cv::Mat>& desp1, const std::vector<cv::Mat>& desp2, int k = 2, uint n_threads = 0);
+    static MatchResKnn KnnMatch(const cv::Mat& desp1, const cv::Mat& desp2, int k = 2, uint n_threads = 0);
 
    public:
     MATCH_DISTANCE dis_mode;

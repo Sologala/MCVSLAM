@@ -46,3 +46,6 @@ third_repos
 .DS_Store
 app/*
 ./app/
+.AppleDouble/.Parent
+ThirdParty/*
+data

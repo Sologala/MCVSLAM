@@ -40,6 +40,8 @@ file(GLOB src_files "./*.c*")
 add_library(osg_viewer ${src_files})
 target_include_directories(osg_viewer PUBLIC
 ./
+)
+target_include_directories(osg_viewer PRIVATE
 ${Boost_INCLUDE_DIR}
 ${OpenCV_INCLUDE_DIRS}
 ${GLUT_INCLUDE_DIRS}
