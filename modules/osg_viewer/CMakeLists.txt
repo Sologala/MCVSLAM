@@ -1,4 +1,5 @@
 set(OpenGL_GL_PREFERENCE "GLVND")
+
 find_package(Boost COMPONENTS system filesystem REQUIRED)
 find_package(OpenCV 4  REQUIRED)
 find_package(GLUT REQUIRED)

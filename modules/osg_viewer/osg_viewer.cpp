@@ -49,9 +49,9 @@ void osg_viewer::Run() {
 
     while (1) {
         viewer->frame();
-        float x = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[0];
-        float y = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[1];
-        float z = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[2];
+        // float x = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[0];
+        // float y = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[1];
+        // float z = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[2];
 
         // cout << x << " " << y << " " << z << endl;
         {
@@ -363,7 +363,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     scene->addChild(points_cams);
 
     // load ground truth traj
-    ShowTracjtory(gt_tracj_path, osg::Vec4(0, 0, 225, 0));
+    ShowTracjtory(gt_tracj_path, osg::Vec4(0, 100, 225, 100));
     scene->addChild(ground_trugh_traj);
 
     viewer->setUpViewInWindow(wnd_rect.x, wnd_rect.y, wnd_rect.width, wnd_rect.height);
@@ -376,7 +376,8 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     // viewer->setCameraManipulator(follower);
     viewer->setCameraManipulator(new osgGA::TrackballManipulator());
 }
-osg_viewer::~osg_viewer() {}
+
+osg_viewer::~osg_viewer() { pthread->join(); }
 
 void osg_viewer::Start() {
     if (pthread) {
