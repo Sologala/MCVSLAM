@@ -1,14 +1,27 @@
+
 #include "PoseEstimation.hpp"
 
+#include <g2o/core/block_solver.h>
+#include <g2o/core/linear_solver.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/solvers/eigen/linear_solver_eigen.h>
 #include <opencv2/core/hal/interface.h>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/types.hpp>
+
+#include "BAoptimizer.hpp"
+#include "Converter.h"
+#include "MapPoint.hpp"
+#include "Object.hpp"
+#include "Pinhole.hpp"
+#include "g2o/types/slam3d/edge_se3.h"
+
 using namespace std;
 using namespace MCVSLAM;
-
-cv::Mat MCVSLAM::PoseEstimation::_2d2d(ObjectRef obj1, ObjectRef obj2, const std::vector<cv::DMatch>& match_res, uint method) {
+using namespace g2o;
+cv::Mat MCVSLAM::PoseEstimation::_2d2d(const ObjectRef &obj1, const ObjectRef &obj2, const std::vector<cv::DMatch> &match_res, uint method) {
     std::vector<cv::Point2f> pts1, pts2;
     pts1.reserve(obj1->size());
     pts2.reserve(obj2->size());
@@ -27,4 +40,85 @@ cv::Mat MCVSLAM::PoseEstimation::_2d2d(ObjectRef obj1, ObjectRef obj2, const std
     R.copyTo(T12.rowRange(0, 3).colRange(0, 3));
     t.copyTo(T12.rowRange(0, 3).col(3));
     return T12;
+}
+#define MIN_DISPARITY 1
+
+int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
+    BAoptimizer op;
+    int nInitialCorrespondences = 0;
+    // Set Frame vertex
+    op.addKeyFrame(frame);
+    {
+        bool fixed = true;
+        for (MapPointRef mp : frame->LEFT->GetMapPoints()) {
+            op.addMapppint(mp, fixed);
+            // Monocular observation
+            uint idx = frame->LEFT->GetMapPointIdx(mp);
+            cv::KeyPoint kp = frame->LEFT->kps[idx];
+            if (frame->u_right[idx] != -1 && frame->u_right[idx] >= MIN_DISPARITY) {
+                op.addEdgeStereo(frame, mp, kp.pt, frame->u_right[idx], kp.octave);
+            } else  // Stereo observation
+            {
+                op.addEdge(frame, mp, kp.pt, kp.octave);
+            }
+        }
+
+        for (MapPointRef mp : frame->WIDE->GetMapPoints()) {
+            op.addMapppint(mp, fixed);
+            uint idx = frame->WIDE->GetMapPointIdx(mp);
+            cv::KeyPoint kp = frame->WIDE->kps[idx];
+            op.addEdgeToBody(frame, mp, kp.pt, kp.octave);
+        }
+    }
+
+    nInitialCorrespondences = op.getEdgeSize();
+
+    if (nInitialCorrespondences < 3) return 0;
+
+    // We perform 4 optimizations, after each optimization we classify observation
+    // as inlier/outlier At the next optimization, outliers are not included, but
+    // at the end they can be classified as inliers again.
+    const float chi2Mono[4] = {5.991, 5.991, 5.991, 5.991};
+    const float chi2Stereo[4] = {7.815, 7.815, 7.815, 7.815};
+    const int its[4] = {5, 10, 15, 18};
+
+    int nBad = 0;
+    int nleft, nwide = 0;
+    srand(time(0));
+
+    for (size_t it = 0; it < 4; it++) {
+        // if (rand() % 2 == 0)
+        // 	op.vertex(0)->setEstimate(Converter::toSE3Quat(pFrame->GetPose(CAMNAME::L)));
+        op.optimize(its[it]);
+        nBad = 0;
+
+        // filter call back
+        auto filter_callback = [&it, &chi2Stereo, &chi2Mono, &nBad](BAoptimizer::EdgeInfoMation &info) {
+            auto e = info.first;
+            MapPointRef mp = info.second.first;
+            ObjectRef obj = info.second.second;
+            if (e->level() == 1) {
+                // level == 1 means this edge has been abort
+                return;
+            }
+            e->computeError();
+            float chi2 = e->chi2();
+            const float thres_hold = (obj->name == CAM_NAME::R ? chi2Stereo[it] : chi2Mono[it]);
+            if (chi2 >= thres_hold) {
+                obj->mOutliers.insert(mp);
+                e->setLevel(1);
+                nBad++;
+            }
+            if (it == 2) e->setRobustKernel(0);
+        };
+        op.filter(filter_callback);
+
+        if (nInitialCorrespondences - nBad < 10) break;
+    }
+    if (nInitialCorrespondences - nBad < 10) {
+        frame->SetPose(op.eval(frame));
+    } else {
+        fmt::print("Too few edge to optimize current pose , Discarded !\n ");
+    }
+    return nInitialCorrespondences - nBad;
 }
