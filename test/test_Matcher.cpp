@@ -88,7 +88,7 @@ void track(std::vector<cv::Mat> &imgs, double time_stamp) {
         ObjectRef f1 = cur_frame->LEFT, f2 = cur_frame->RIGHT;
         MatchRes match_res = Matcher::KnnMatch_cv(f1->desps, f2->desps).FilterRatio(0.6);
         cv::Mat T = PoseEstimation::_2d2d(f1, f2, match_res);
-        cout << T << endl;
+        // cout << T << endl;
     }
     viewer.Draw(_map.GetAllMappointsForShow(), 0, 0, 225);
     viewer.Commit();

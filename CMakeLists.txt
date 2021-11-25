@@ -15,8 +15,6 @@ link_libraries(pyp::fmt pyp::timer pyp::yaml pyp::cmdline)
 
 
 
-
-
 add_subdirectory(modules)
 file(GLOB src_file "./src/*.c*")
 add_library(MCVSLAM ${src_file})
@@ -36,7 +34,7 @@ target_link_libraries( MCVSLAM
     SURF
     camera
     osg_viewer
-    g2o::core
+    ${G2O_LIBS}
 )
 
 

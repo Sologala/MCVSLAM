@@ -6,6 +6,7 @@
 
 #include "Matcher.hpp"
 #include "Object.hpp"
+#include "Pinhole.hpp"
 #include "pyp/timer/timer.hpp"
 #include "thread_pool.hpp"
 using namespace std;
@@ -25,9 +26,9 @@ int extractORB(std::shared_ptr<Object> &obj, ORB *extractor) { return extractor-
 
 Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
              BaseCamera *cam_wide) {
-    LEFT = std::make_shared<Object>(cam_left, imgleft);
-    RIGHT = std::make_shared<Object>(cam_left, imgright);
-    WIDE = std::make_shared<Object>(cam_left, imgwide);
+    LEFT = std::make_shared<Object>(cam_left, imgleft, CAM_NAME::L);
+    RIGHT = std::make_shared<Object>(cam_left, imgright, CAM_NAME::R);
+    WIDE = std::make_shared<Object>(cam_left, imgwide, CAM_NAME::W);
 
     {
         MyTimer::Timer _("ORB_EXTRACT");

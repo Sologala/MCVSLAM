@@ -12,13 +12,14 @@ class MapPoint {
 
    public:
     ~MapPoint();
+    cv::Mat GetWorldPos() { return position_w; }
 
    public:
     // Position in absolute coordinates
     cv::Mat position_w;
     cv::Mat desp;
     uint id;
-        
+
    private:
     MapPoint(double x, double y, double z, cv::Mat _desp, uint id);
 };
