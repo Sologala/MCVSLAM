@@ -1,7 +1,9 @@
-#ifndef OBJECT_H
-#define OBJECT_H
+#ifndef OBJECT_HPP
+#define OBJECT_HPP
+
 #include <boost/thread.hpp>
 #include <boost/thread/pthread/mutex.hpp>
+#include <unordered_set>
 #include <vector>
 
 #include "BaseCamera.hpp"
@@ -9,7 +11,6 @@
 #include "MapPoint.hpp"
 #include "Pinhole.hpp"
 #include "pyp/fmt/fmt.hpp"
-
 using READLOCK = boost::shared_lock<boost::shared_mutex>;
 using WRITELOCK = boost::unique_lock<boost::shared_mutex>;
 using UNIQUELOCK = boost::unique_lock<boost::mutex>;
@@ -26,7 +27,7 @@ class Grid : public std::vector<std::vector<std::vector<std::size_t>>> {
 class Object {
    public:
     virtual ~Object(){};
-    Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img);
+    Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, CAM_NAME name);
 
     // ---------------------[Statistic] ----------------------
     size_t size() const { return kps.size(); }
@@ -218,6 +219,8 @@ class Object {
 
     std::vector<size_t> idxs;
     std::vector<MapPointRef> MPs;
+    //  for recored the outliers MapPoints.
+    std::unordered_set<MapPointRef> mOutliers;
 
    private:
     Grid grid;
@@ -242,4 +245,5 @@ class Object {
 using ObjectRef = std::shared_ptr<Object>;
 
 }  // namespace MCVSLAM
-#endif
+
+#endif  // OBJECT_HPP

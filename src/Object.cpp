@@ -4,7 +4,7 @@
 using namespace std;
 
 namespace MCVSLAM {
-Object::Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img) : mpCam(_cam), img(_img) {
+Object::Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, CAM_NAME name) : mpCam(_cam), img(_img), name(name) {
     SetPose(cv::Mat::eye(4, 4, CV_32F));
     bounddingbox = cv::Rect(0, 0, img.cols, img.rows);
     grid_width_inv = static_cast<double>(FRAME_GRID_COLS) / img.cols;
