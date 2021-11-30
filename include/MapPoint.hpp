@@ -1,18 +1,40 @@
 #ifndef MAPPOINT_H
 #define MAPPOINT_H
+#include <boost/thread/pthread/mutex.hpp>
+#include <boost/thread/pthread/shared_mutex.hpp>
+#include <memory>
 #pragma once
+#include <boost/thread.hpp>
 #include <opencv2/core/mat.hpp>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
-namespace MCVSLAM {
-class Map;
 
-class MapPoint {
+#include "Map.hpp"
+namespace MCVSLAM {
+using Observation = std::unordered_map<KeyFrame, std::unordered_set<ObjectRef>>;
+
+class MapPoint : public std::enable_shared_from_this<MapPoint> {
     friend class Map;
 
    public:
     ~MapPoint();
-    cv::Mat GetWorldPos() { return position_w; }
+    const cv::Mat GetWorldPos();
+    void SetWorldPose(const cv::Mat& pos);
+
+    const cv::Mat GetDesp();
+    const uint GetID() const { return id; };
+
+    void BindKeyFrame(KeyFrame kf, ObjectRef obj);
+    void UnBindKeyFrame(KeyFrame kf, ObjectRef obj);
+
+    const std::unordered_set<KeyFrame> GetAllKeyFrame();
+    const Observation GetAllObservation();
+
+    // normal adn median depth
+    cv::Mat GetNormalVector();
+    void UpdateNormalVector();
+    void ComputeDistinctiveDescriptors();
 
    public:
     // Position in absolute coordinates
@@ -20,11 +42,16 @@ class MapPoint {
     cv::Mat desp;
     uint id;
 
+    boost::shared_mutex mtx_pos;
+
+    boost::shared_mutex mtx_feature;
+
+    cv::Mat norm_vec;
+    Observation relative_kfs;
+
    private:
     MapPoint(double x, double y, double z, cv::Mat _desp, uint id);
 };
-
-using MapPointRef = std::shared_ptr<MapPoint>;
 
 }  // namespace MCVSLAM
 #endif
