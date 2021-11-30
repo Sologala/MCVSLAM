@@ -94,7 +94,7 @@ static float IC_Angle(const Mat& image, Point2f pt, const vector<int>& u_max) {
 }
 
 const float factorPI = (float)(CV_PI / 180.f);
-static void computeOrbDescriptor(const KeyPoint& kpt, const Mat& img, const Point* pattern, uchar* desc) {
+void computeOrbDescriptor(const KeyPoint& kpt, const Mat& img, const Point* pattern, uchar* desc) {
     float angle = (float)kpt.angle * factorPI;
     float a = (float)cos(angle), b = (float)sin(angle);
 
@@ -400,7 +400,7 @@ ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels, int
     init(_nfeatures, _scaleFactor, _nlevels, _iniThFAST, _minThFAST);
 }
 
-void ORBextractor::init(int nfeatures, float scaleFactor, int nlevels, int iniThFAST, int minThFAST){
+void ORBextractor::init(int nfeatures, float scaleFactor, int nlevels, int iniThFAST, int minThFAST) {
     mvScaleFactor.resize(nlevels);
     mvLevelSigma2.resize(nlevels);
     mvScaleFactor[0] = 1.0f;
@@ -452,6 +452,10 @@ void ORBextractor::init(int nfeatures, float scaleFactor, int nlevels, int iniTh
     }
 }
 
+void ORBextractor::ComputeDesps(const cv::Mat& img, const std::vector<cv::KeyPoint> kps, cv::Mat& _desps) {
+    _desps = cv::Mat::zeros((int)kps.size(), 32, CV_8UC1);
+    for (size_t i = 0; i < kps.size(); i++) computeOrbDescriptor(kps[i], img, &pattern[0], _desps.ptr((int)i));
+}
 
 static void computeOrientation(const Mat& image, vector<KeyPoint>& keypoints, const vector<int>& umax) {
     for (vector<KeyPoint>::iterator keypoint = keypoints.begin(), keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint) {
@@ -937,7 +941,7 @@ void ORBextractor::ComputeKeyPointsOld(std::vector<std::vector<KeyPoint> >& allK
     for (int level = 0; level < nlevels; ++level) computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
 }
 
-static void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const vector<Point>& pattern) {
+void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const vector<Point>& pattern) {
     descriptors = Mat::zeros((int)keypoints.size(), 32, CV_8UC1);
 
     for (size_t i = 0; i < keypoints.size(); i++) computeOrbDescriptor(keypoints[i], image, &pattern[0], descriptors.ptr((int)i));

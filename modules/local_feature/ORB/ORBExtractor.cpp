@@ -36,4 +36,5 @@ int ORB::Extract(const cv::Mat img, Keypoints& kps, Desps& desps) {
     }
     return cnt;
 }
+
 }  // namespace MCVSLAM

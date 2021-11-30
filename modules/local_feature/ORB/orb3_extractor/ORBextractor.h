@@ -20,6 +20,8 @@
 #define ORBEXTRACTOR_H
 
 #include <list>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/core/types.hpp>
 #include <opencv2/opencv.hpp>
 #include <vector>
 
@@ -74,6 +76,8 @@ class ORBextractor {
                                                 const int &maxY, const int &nFeatures, const int &level);
 
     void ComputeKeyPointsOld(std::vector<std::vector<cv::KeyPoint> > &allKeypoints);
+
+    void ComputeDesps(const cv::Mat &img, const std::vector<cv::KeyPoint> kps, cv::Mat &_desps);
     std::vector<cv::Point> pattern;
 
     int nfeatures;
