@@ -3,13 +3,19 @@
 
 #include <boost/thread.hpp>
 #include <boost/thread/pthread/mutex.hpp>
+#include <memory>
 #include <unordered_set>
 #include <vector>
 
 #include "BaseCamera.hpp"
-#include "BaseExtractor.hpp"
+#include "BowVector.h"
+#include "DBoW3.h"
+#include "FeatureVector.h"
 #include "MapPoint.hpp"
+#include "Matcher.hpp"
+#include "ORBExtractor.hpp"
 #include "Pinhole.hpp"
+#include "Vocabulary.h"
 #include "pyp/fmt/fmt.hpp"
 using READLOCK = boost::shared_lock<boost::shared_mutex>;
 using WRITELOCK = boost::unique_lock<boost::shared_mutex>;
@@ -27,7 +33,7 @@ class Grid : public std::vector<std::vector<std::vector<std::size_t>>> {
 class Object {
    public:
     virtual ~Object(){};
-    Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, CAM_NAME name);
+    Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, ORB *_extractor, CAM_NAME name);
 
     // ---------------------[Statistic] ----------------------
     size_t size() const { return kps.size(); }
@@ -141,9 +147,17 @@ class Object {
         {
             UNIQUELOCK lock(mtxMapPoints);
             if (mMP2IDX.count(pMP) || mIDX2MP.count(idx)) {
-                // double delete for force guaranty
-                DelMapPoint(pMP);
-                DelMapPoint(idx);
+                // check distance
+                uint dist_ori = HammingDistance(pMP->GetDesp(), desps.row(idx));
+                uint dist_new = HammingDistance(mIDX2MP[idx]->GetDesp(), desps.row(idx));
+                if (dist_new < dist_ori) {
+                    // double delete for force guaranty
+                    DelMapPoint(pMP);
+                    DelMapPoint(idx);
+                } else {
+                    // do nothing
+                    return;
+                }
             }
             mIDX2MP[idx] = pMP;
             mMP2IDX[pMP] = idx;
@@ -187,6 +201,9 @@ class Object {
         return ret;
     }
 
+    // mappoint normal & median depth
+    float ComputeSceneMedianDepth();
+
     // ---------------------[Grid] ----------------------
     bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
 
@@ -198,10 +215,18 @@ class Object {
     // ------------------[repenish some information]---------------------------
     void repenish(std::vector<MapPointRef> &vMaps, std::vector<cv::KeyPoint> &vKPs, std::vector<cv::Mat> &vDesps);
 
+    void AssignFeaturesToGrid();
+
+    //  project a bunch of mappoints to this frame with current pose;
+    void ProjectBunchMapPoints(const std::vector<MapPointRef> &mps, float r_threshold = 5);
+    void ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, float r_threshold = 5);
+
+    // Bow index
+    void ComputeBow();
+
    protected:
     // ---------------------[Pose] ----------------------
     void UpdatePoseMatrix();
-    void AssignFeaturesToGrid();
 
    protected:
     boost::mutex mtxMapPoints;
@@ -217,10 +242,18 @@ class Object {
     Keypoints kps;
     Desps desps;
 
+    // Bow index
+    DBoW3::BowVector bow_vector;
+    DBoW3::FeatureVector bow_feature;
+
+    // Sparse storage;
     std::vector<size_t> idxs;
     std::vector<MapPointRef> MPs;
     //  for recored the outliers MapPoints.
     std::unordered_set<MapPointRef> mOutliers;
+
+    static DBoW3::Vocabulary voc;
+    ORB *extractor;
 
    private:
     Grid grid;
@@ -241,8 +274,6 @@ class Object {
     cv::Mat mtcw;
     cv::Mat mTwc;
 };
-
-using ObjectRef = std::shared_ptr<Object>;
 
 }  // namespace MCVSLAM
 

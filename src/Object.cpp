@@ -1,14 +1,40 @@
 #include "Object.hpp"
 
+#include <cstddef>
 #include <opencv2/core/types.hpp>
+
+#include "Map.hpp"
+#include "Matcher.hpp"
+#include "Vocabulary.h"
 using namespace std;
 
 namespace MCVSLAM {
-Object::Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, CAM_NAME name) : mpCam(_cam), img(_img), name(name) {
+
+DBoW3::Vocabulary Object::voc;
+
+Object::Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, ORB *_extractor, CAM_NAME name) : mpCam(_cam), img(_img), name(name), extractor(_extractor) {
     SetPose(cv::Mat::eye(4, 4, CV_32F));
     bounddingbox = cv::Rect(0, 0, img.cols, img.rows);
     grid_width_inv = static_cast<double>(FRAME_GRID_COLS) / img.cols;
     grid_width_inv = static_cast<double>(FRAME_GRID_ROWS) / img.rows;
+}
+
+float Object::ComputeSceneMedianDepth() {
+    cv::Mat Tcw_ = GetPose();
+    vector<float> vDepths;
+    vDepths.reserve(size());
+    cv::Mat Rwc = GetRotation().t();
+    float zcw = Tcw_.at<float>(2, 3);
+
+    // int cnt_mines_depth = 0;
+    for (MapPointRef mp : GetMapPoints()) {
+        // there still statistic the outlier's depth;
+        cv::Mat x3Dw = mp->GetWorldPos();
+        float z = Rwc.dot(x3Dw) + zcw;
+        vDepths.push_back(z);
+    }
+    sort(vDepths.begin(), vDepths.end());
+    return vDepths[(vDepths.size()) / 2];
 }
 
 void Object::UpdatePoseMatrix() {
@@ -40,6 +66,40 @@ void Object::AssignFeaturesToGrid() {
         if (PosInGrid(kp, nGridPosX, nGridPosY)) {
             grid[nGridPosX][nGridPosY].push_back(i);
         }
+    }
+}
+
+void Object::ProjectBunchMapPoints(const std::vector<MapPointRef> &mps, float r_threshold) {
+    std::unordered_set<MapPointRef> maps_set(mps.begin(), mps.end());
+    ProjectBunchMapPoints(maps_set, r_threshold);
+}
+
+void Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, float r_threshold) {
+    for (const MapPointRef &mp : mps) {
+        cv::Point2f pt = this->mpCam->project(this->GetPose() * mp->GetWorldPos());
+        int x, y;
+        bool ingrid = PosInGrid(cv::KeyPoint(pt, 1), x, y);
+        if (ingrid) {
+            std::vector<cv::Mat> _desps;
+
+            for (size_t idx : GetFeaturesInArea(x, y, r_threshold)) {
+                _desps.push_back(desps.row(idx));
+            }
+            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio().FilterThreshold();
+            if (res.size()) {
+                AddMapPoint(mp, res[0].trainIdx);
+            }
+        }
+    }
+}
+
+void Object::ComputeBow() {
+    if (bow_vector.empty()) {
+        std::vector<cv::Mat> v_desps;
+        for (uint i = 0, sz = desps.rows; i < sz; i++) {
+            v_desps.push_back(desps.row(i));
+        }
+        voc.transform(v_desps, bow_vector, bow_feature, 4);
     }
 }
 

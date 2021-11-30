@@ -5,7 +5,6 @@
 #include <unordered_set>
 
 #include "BaseExtractor.hpp"
-#include "MapPoint.hpp"
 #include "ORBExtractor.hpp"
 #include "Object.hpp"
 #include "Pinhole.hpp"
@@ -13,8 +12,13 @@
 #pragma once
 namespace MCVSLAM {
 class Frame {
+    friend class Map;
+
+   private:
+    Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right, BaseCamera* cam_wide,
+          uint _id);
+
    public:
-    Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right, BaseCamera* cam_wide);
     ~Frame();
     static int Parse(const std::string& config_file);
 
@@ -24,12 +28,14 @@ class Frame {
     cv::Mat SetPose(cv::Mat Tcw);
     cv::Mat GetPose();
 
+    void ComputeBow();
+
    public:
     ObjectRef LEFT, RIGHT, WIDE;
 
-    uint fram_id;
+    uint id;
     double time_stamp;
-    std::unordered_set<MapPointRef> mps;
+
     std::vector<float> u_right;
     std::vector<float> depth_left;
     std::vector<cv::DMatch> left_right_match_res;
@@ -40,7 +46,5 @@ class Frame {
     static float b, bf;
 };
 
-using FrameRef = std::shared_ptr<Frame>;
-using KeyFrame = FrameRef;
 }  // namespace MCVSLAM
 #endif

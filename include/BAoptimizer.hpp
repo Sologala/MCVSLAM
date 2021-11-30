@@ -1,9 +1,11 @@
 #ifndef BAOPTIMIZER_H
 #define BAOPTIMIZER_H
 #include <g2o/core/optimizable_graph.h>
+#include <g2o/core/solver.h>
 
 #include <algorithm>
 
+#include "Map.hpp"
 #include "Object.hpp"
 #pragma once
 
@@ -31,6 +33,7 @@ class BAoptimizer : public g2o::SparseOptimizer {
 
     void addKeyFrame(const KeyFrame &kf, bool fixed = false);
     void addMapppint(const MapPointRef &mp, bool fixed = false);
+
     void addEdge(const KeyFrame &kf, const MapPointRef &mp, const cv::Point2f &uv, const float &level);
 
     void addEdgeStereo(const KeyFrame &kf, const MapPointRef &mp, const cv::Point2f &uv, float ru, const float &level);
@@ -47,7 +50,10 @@ class BAoptimizer : public g2o::SparseOptimizer {
     cv::Mat eval(const MapPointRef &mp);
 
     // Set KeyFrame vertices
-    size_t tID = 0;
+    size_t _vettex_id = 0;
+    std::unordered_set<KeyFrame> ALLKFS;
+    std::unordered_set<MapPointRef> ALLMPS;
+
     std::unordered_map<KeyFrame, size_t> KF2ID;
     std::unordered_map<MapPointRef, size_t> MP2ID;
 
@@ -56,13 +62,15 @@ class BAoptimizer : public g2o::SparseOptimizer {
 
     // filter out Edge
 
-    using EdgeInfoMation = std::pair<g2o::OptimizableGraph::Edge *, std::pair<MapPointRef, ObjectRef>>;
+    typedef std::pair<g2o::OptimizableGraph::Edge *, std::pair<MapPointRef, ObjectRef>> EdgeInfoMation;
     std::unordered_map<g2o::OptimizableGraph::Edge *, std::pair<MapPointRef, ObjectRef>> EdgeInfos;
 
     template <class FilterCallBack>
     void filter(FilterCallBack &&callback) {
         std::for_each(EdgeInfos.begin(), EdgeInfos.end(), callback);
     }
+
+    void recovery_all();
 
    private:
     std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolver;

@@ -1,24 +1,42 @@
 #include "BAoptimizer.hpp"
 
 #include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/core/sparse_optimizer.h>
 #include <g2o/stuff/misc.h>
 #include <opencv2/core/hal/interface.h>
 
 #include <memory>
+
+#include "Map.hpp"
 namespace MCVSLAM {
 BAoptimizer::BAoptimizer() {
     linearSolver = g2o::make_unique<g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>>();
     solver = new g2o::OptimizationAlgorithmLevenberg(g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver)));
+    _vettex_id = 0;
     this->setAlgorithm(solver);
 }
 
-BAoptimizer::~BAoptimizer() { delete solver; }
+BAoptimizer::~BAoptimizer() {}
 
-void BAoptimizer::addMapppint(const MapPointRef &mp, bool fixed) {
-    if (MP2ID.count(mp) == 0)
-        MP2ID[mp] = tID++;
+void BAoptimizer::addKeyFrame(const KeyFrame &kf, bool fixed) {
+    if (KF2ID.count(kf) == 0)
+        KF2ID[kf] = _vettex_id++;
     else
         return;
+    ALLKFS.insert(kf);
+    g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
+    vSE3->setEstimate(Converter::toSE3Quat(kf->GetPose()));
+    vSE3->setId(KF2ID[kf]);
+    // Set fixed if kf is the first frame.
+    vSE3->setFixed(fixed || kf->id == 0);
+    g2o::SparseOptimizer::addVertex(vSE3);
+}
+void BAoptimizer::addMapppint(const MapPointRef &mp, bool fixed) {
+    if (MP2ID.count(mp) == 0)
+        MP2ID[mp] = _vettex_id++;
+    else
+        return;
+    ALLMPS.insert(mp);
     g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
     vPoint->setEstimate(Converter::toVector3d(mp->GetWorldPos()));
     vPoint->setId(MP2ID[mp]);
@@ -110,16 +128,15 @@ cv::Mat BAoptimizer::eval(const MapPointRef &mp) {
     return Converter::toCvMat(vPoint->estimate());
 }
 
-void BAoptimizer::addKeyFrame(const KeyFrame &kf, bool fixed) {
-    if (KF2ID.count(kf) == 0)
-        KF2ID[kf] = tID++;
-    else
-        return;
-
-    g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
-    vSE3->setEstimate(Converter::toSE3Quat(kf->GetPose()));
-    vSE3->setId(KF2ID[kf]);
-    vSE3->setFixed(fixed);
-    g2o::SparseOptimizer::addVertex(vSE3);
+void BAoptimizer::recovery_all() {
+    {
+        for (KeyFrame kf : ALLKFS) {
+            kf->SetPose(eval(kf));
+        }
+        for (MapPointRef mp : ALLMPS) {
+            mp->SetWorldPose(eval(mp));
+        }
+    }
 }
+
 }  // namespace MCVSLAM

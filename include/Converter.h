@@ -55,6 +55,8 @@ class Converter {
 
     static bool isRotationMatrix(const cv::Mat &R);
     static std::vector<float> toEuler(const cv::Mat &R);
+
+    static cv::Mat toSkewSymmetricMatrix(const cv::Mat &v);
 };
 
 }  // namespace MCVSLAM

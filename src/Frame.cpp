@@ -4,9 +4,11 @@
 #include <opencv2/core/types.hpp>
 #include <pyp/yaml/yaml.hpp>
 
+#include "Map.hpp"
 #include "Matcher.hpp"
 #include "Object.hpp"
 #include "Pinhole.hpp"
+#include "Vocabulary.h"
 #include "pyp/timer/timer.hpp"
 #include "thread_pool.hpp"
 using namespace std;
@@ -24,11 +26,11 @@ float Frame::b, Frame::bf;
 
 int extractORB(std::shared_ptr<Object> &obj, ORB *extractor) { return extractor->Extract(obj->img, obj->kps, obj->desps); }
 
-Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
-             BaseCamera *cam_wide) {
-    LEFT = std::make_shared<Object>(cam_left, imgleft, CAM_NAME::L);
-    RIGHT = std::make_shared<Object>(cam_left, imgright, CAM_NAME::R);
-    WIDE = std::make_shared<Object>(cam_left, imgwide, CAM_NAME::W);
+Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right, BaseCamera *cam_wide,
+             uint _id) {
+    LEFT = std::make_shared<Object>(cam_left, imgleft, &extractor_left, CAM_NAME::L);
+    RIGHT = std::make_shared<Object>(cam_left, imgright, &extractor_right, CAM_NAME::R);
+    WIDE = std::make_shared<Object>(cam_left, imgwide, &extractor_wide, CAM_NAME::W);
 
     {
         MyTimer::Timer _("ORB_EXTRACT");
@@ -39,6 +41,10 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
         res_right.get();
         res_wide.get();
     }
+
+    LEFT->AssignFeaturesToGrid();
+    RIGHT->AssignFeaturesToGrid();
+    WIDE->AssignFeaturesToGrid();
 
     depth_left.resize(LEFT->size(), -1);
     ComputeStereoMatch(LEFT, RIGHT);
@@ -225,6 +231,11 @@ cv::Mat Frame::SetPose(cv::Mat Tcw) {
 
 cv::Mat Frame::GetPose() { return LEFT->GetPose(); }
 
+void Frame::ComputeBow() {
+    LEFT->ComputeBow();
+    WIDE->ComputeBow();
+}
+
 int Frame::Parse(const std::string &config_file) {
     Yaml::Node root;
     Yaml::Parse(root, config_file);
@@ -242,6 +253,7 @@ int Frame::Parse(const std::string &config_file) {
     extractor_left = ORB(cur_folder + "/" + root["left_extractor_path"].As<string>());
     extractor_right = ORB(cur_folder + "/" + root["right_extractor_path"].As<string>());
     extractor_wide = ORB(cur_folder + "/" + root["wide_extractor_path"].As<string>());
+    Object::voc.load(root["bow_vocabulary_path"].As<string>());
     return 0;
 }
 }  // namespace MCVSLAM

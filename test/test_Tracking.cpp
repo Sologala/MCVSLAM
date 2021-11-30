@@ -3,6 +3,7 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <ros/ros.h>
+#include <unistd.h>
 
 #include <deque>
 #include <iostream>
@@ -20,14 +21,15 @@
 #include "Frame.hpp"
 #include "Map.hpp"
 #include "MapPoint.hpp"
+#include "Matcher.hpp"
 #include "Object.hpp"
 #include "Pinhole.hpp"
 #include "PoseEstimation.hpp"
+#include "Tracker.hpp"
 #include "capture/capture.hpp"
 #include "image_transport/subscriber.h"
 #include "local_feature/ORB/ORBExtractor.hpp"
 #include "local_feature/SURF/SURFExtractor.hpp"
-#include "matcher/Matcher.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/opencv.hpp"
@@ -44,17 +46,14 @@ BaseExtractor *extractor;
 
 int idx_number_kps;
 int tic = 0;
-FrameRef last_frame;
-KeyFrame last_keyframe;
 int ret = Frame::Parse("/home/wen/SLAM/MCVSLAM/config/frame.yaml");
-Pinhole cam_left("/home/wen/SLAM/MCVSLAM/config/camleft.yaml"), cam_wide("/home/wen/SLAM/MCVSLAM/config/camwide.yaml");
-float baseline = 0.8;
-float bf = 764.324024;
-
 osg_viewer viewer("/home/wen/SLAM/MCVSLAM/config/viewer.yaml");
-Map _map;
-
+Map _map("/home/wen/SLAM/MCVSLAM/config/system.yaml");
+cv::Mat velocity;
 std::queue<FrameRef> localMap;
+Pinhole cam_left("/home/wen/SLAM/MCVSLAM/config/camleft.yaml"), cam_wide("/home/wen/SLAM/MCVSLAM/config/camwide.yaml");
+Tracker tracker(&_map, &viewer);
+
 void track(std::vector<cv::Mat> &imgs, double time_stamp) {
     // 1.construct Frame
     std::vector<cv::Mat> imggrays(3);
@@ -63,40 +62,9 @@ void track(std::vector<cv::Mat> &imgs, double time_stamp) {
         cv::cvtColor(imgs[i], imggrays[i], cv::COLOR_BGR2GRAY);
     }
 
-    MyTimer::Timer _("frame construct");
-    _.tick();
-    FrameRef cur_frame = make_shared<Frame>(imggrays[0], imggrays[1], imggrays[2], time_stamp, &cam_left, &cam_left, &cam_wide);
-    _.tock();
+    FrameRef cur_frame = _map.CreateFrame(imggrays[0], imggrays[1], imggrays[2], time_stamp, &cam_left, &cam_left, &cam_wide);
 
-    if (last_frame == nullptr) {
-        // create mappoints
-        for (uint i = 0, sz = cur_frame->LEFT->size(); i < sz; i++) {
-            cv::KeyPoint kp = cur_frame->LEFT->kps[i];
-            float depth = cur_frame->depth_left[i];
-            if (depth != -1) {
-                cv::Mat mp = cur_frame->LEFT->mpCam->unproject_z(kp.pt, depth);
-                // cout << mp << endl;
-                auto mpr = _map.CreateMappoint(mp, cur_frame->LEFT->desps.row(i));
-            }
-        }
-        // create keyframes
-
-        _map.AddKeyFrame(cur_frame);
-        last_keyframe = cur_frame;
-    } else {
-        // Track last Frame
-        ObjectRef f1 = cur_frame->LEFT, f2 = cur_frame->RIGHT;
-        MatchRes match_res = Matcher::KnnMatch_cv(f1->desps, f2->desps).FilterRatio(0.6);
-        cv::Mat T = PoseEstimation::_2d2d(f1, f2, match_res);
-        // cout << T << endl;
-    }
-    viewer.Draw(_map.GetAllMappointsForShow(), 0, 0, 225);
-    viewer.Commit();
-    last_frame = cur_frame;
-    fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
-    for (auto p : MyTimer::Timer::COUNT) {
-        fmt::print("{:^20}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(), p.second.fps());
-    }
+    tracker.Track(cur_frame);
 }
 
 void imageCallback(const sensor_msgs::ImageConstPtr &img_left, const sensor_msgs::ImageConstPtr &img_right,
@@ -131,5 +99,9 @@ int main(int argc, char **argv) {
     //  pub = it.advertise(PedDet::global_config::gcfg.topic_oup_detection_result,);
     ros::spin();
     ros::shutdown();
+    viewer.RequestStop();
+    while (viewer.IsStoped()) {
+        usleep(3000);
+    }
     return 0;
 }
