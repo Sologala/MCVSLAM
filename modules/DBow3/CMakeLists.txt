@@ -18,10 +18,10 @@ add_library(
 
 target_include_directories(
     Dbow3 PUBLIC
-    ./src/
-
+    src
 )
 target_link_libraries(
     Dbow3
     ${OpenCV_LIBRARIES}
 )
+

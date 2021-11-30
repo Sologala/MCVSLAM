@@ -140,8 +140,7 @@ void Vocabulary::create(const std::vector<std::vector<cv::Mat> > &training_featu
 
 // --------------------------------------------------------------------------
 
-void Vocabulary::create(const std::vector<std::vector<cv::Mat> > &training_features, int k, int L, WeightingType weighting,
-                        ScoringType scoring) {
+void Vocabulary::create(const std::vector<std::vector<cv::Mat> > &training_features, int k, int L, WeightingType weighting, ScoringType scoring) {
     m_k = k;
     m_L = L;
     m_weighting = weighting;
@@ -933,7 +932,7 @@ void Vocabulary::save(cv::FileStorage &f, const std::string &name) const {
     f << "}";
 }
 
-void Vocabulary::toStream(std::ostream &out_str, bool compressed) const throw(std::exception) {
+void Vocabulary::toStream(std::ostream &out_str, bool compressed) const {
     uint64_t sig = 88877711233;  // magic number describing the file
     out_str.write((char *)&sig, sizeof(sig));
     out_str.write((char *)&compressed, sizeof(compressed));
@@ -1004,7 +1003,7 @@ void Vocabulary::toStream(std::ostream &out_str, bool compressed) const throw(st
     }
 }
 
-void Vocabulary::load_fromtxt(const std::string &filename) throw(std::runtime_error) {
+void Vocabulary::load_fromtxt(const std::string &filename) {
     std::ifstream ifile(filename);
     if (!ifile) throw std::runtime_error("Vocabulary:: load_fromtxt  Could not open file for reading:" + filename);
     int n1, n2;
@@ -1074,7 +1073,7 @@ void Vocabulary::load_fromtxt(const std::string &filename) throw(std::runtime_er
         }
     }
 }
-void Vocabulary::fromStream(std::istream &str) throw(std::exception) {
+void Vocabulary::fromStream(std::istream &str) {
     m_words.clear();
     m_nodes.clear();
     uint64_t sig = 0;  // magic number describing the file
