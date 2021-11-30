@@ -6,3 +6,5 @@ bf: 955.40503
 left_extractor_path: "./extractor.yaml"
 right_extractor_path: "./extractor.yaml"
 wide_extractor_path: "./extractor.yaml"
+
+bow_vocabulary_path: "../Vocabulary/orbvoc.dbow3"
