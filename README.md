@@ -19,6 +19,7 @@
 - [ ] 实现视觉里程计
 
 
+![](./.readme/align_result.png)
 ![](./.readme/osg_model_visulization.png)
 
 
