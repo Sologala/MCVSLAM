@@ -26,7 +26,7 @@
 #include "BaseCamera.hpp"
 namespace MCVSLAM {
 
-enum CAM_NAME { L = 0, R = 1, W = 2 };
+enum CAM_NAME { L = 0x01, R = 0x02, W = 0x04 };
 
 class Pinhole : public BaseCamera {
    public:
