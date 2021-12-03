@@ -19,10 +19,8 @@ BAoptimizer::BAoptimizer() {
 BAoptimizer::~BAoptimizer() {}
 
 void BAoptimizer::addKeyFrame(const KeyFrame &kf, bool fixed) {
-    if (KF2ID.count(kf) == 0)
-        KF2ID[kf] = _vettex_id++;
-    else
-        return;
+    if (KF2ID.count(kf) != 0) return;
+    KF2ID[kf] = _vettex_id++;
     ALLKFS.insert(kf);
     g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
     vSE3->setEstimate(Converter::toSE3Quat(kf->GetPose()));
@@ -32,14 +30,13 @@ void BAoptimizer::addKeyFrame(const KeyFrame &kf, bool fixed) {
     g2o::SparseOptimizer::addVertex(vSE3);
 }
 void BAoptimizer::addMapppint(const MapPointRef &mp, bool fixed) {
-    if (MP2ID.count(mp) == 0)
-        MP2ID[mp] = _vettex_id++;
-    else
-        return;
+    if (MP2ID.count(mp) != 0) return;
+    MP2ID[mp] = _vettex_id++;
     ALLMPS.insert(mp);
     g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
     vPoint->setEstimate(Converter::toVector3d(mp->GetWorldPos()));
     vPoint->setId(MP2ID[mp]);
+    vPoint->setFixed(fixed);
     vPoint->setMarginalized(true);
     g2o::SparseOptimizer::addVertex(vPoint);
 }
@@ -111,7 +108,7 @@ void BAoptimizer::addEdgeToBody(const KeyFrame &kf, const MapPointRef &mp, const
 
 void BAoptimizer::optimize(const int n) {
     g2o::SparseOptimizer::initializeOptimization();
-    // fmt::print("vertex {} , edges {}\n", g2o::SparseOptimizer::_vertices.size(), g2o::SparseOptimizer::_edges.size());
+    fmt::print("vertex {} , edges {}\n", g2o::SparseOptimizer::_vertices.size(), g2o::SparseOptimizer::_edges.size());
     g2o::SparseOptimizer::optimize(n);
 }
 

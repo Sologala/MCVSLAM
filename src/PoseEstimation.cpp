@@ -24,9 +24,6 @@ using namespace std;
 using namespace MCVSLAM;
 using namespace g2o;
 
-#define CHI2_STEREO_THRESHOLD 7.815
-#define CHI2_MONO_THRESHOLD 5.991
-
 cv::Mat MCVSLAM::PoseEstimation::_2d2d(const ObjectRef &obj1, const ObjectRef &obj2, const std::vector<cv::DMatch> &match_res, uint method) {
     std::vector<cv::Point2f> pts1, pts2;
     pts1.reserve(obj1->size());
@@ -47,7 +44,6 @@ cv::Mat MCVSLAM::PoseEstimation::_2d2d(const ObjectRef &obj1, const ObjectRef &o
     t.copyTo(T12.rowRange(0, 3).col(3));
     return T12;
 }
-#define MIN_DISPARITY 1
 
 int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
     BAoptimizer op;
@@ -111,7 +107,6 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
             float chi2 = e->chi2();
             const float thres_hold = (obj->name == CAM_NAME::R ? chi2Stereo[it] : chi2Mono[it]);
             if (chi2 >= thres_hold) {
-                obj->mOutliers.insert(mp);
                 e->setLevel(1);
                 nBad++;
             }
@@ -122,64 +117,41 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
         if (nInitialCorrespondences - nBad < 10) break;
     }
     if (nInitialCorrespondences - nBad < 10) {
-        frame->SetPose(op.eval(frame));
-    } else {
         fmt::print("Too few edge to optimize current pose , Discarded !\n ");
+    } else {
+        frame->SetPose(op.eval(frame));
     }
     return nInitialCorrespondences - nBad;
 }
 
-int MCVSLAM::PoseEstimation::BoundAdjustment(const std::unordered_set<KeyFrame> &kfs, uint n_iter) {
-    BAoptimizer op;
-    for (const KeyFrame &kf : kfs) {
-        op.addKeyFrame(kf);
-        bool fixed = true;
-        for (MapPointRef mp : kf->LEFT->GetMapPoints()) {
-            op.addMapppint(mp, fixed);
-            // Monocular observation
-            uint idx = kf->LEFT->GetMapPointIdx(mp);
-            cv::KeyPoint kp = kf->LEFT->kps[idx];
-            if (kf->u_right[idx] != -1 && kf->u_right[idx] >= MIN_DISPARITY) {
-                op.addEdgeStereo(kf, mp, kp.pt, kf->u_right[idx], kp.octave);
-            } else  // Stereo observation
-            {
-                op.addEdge(kf, mp, kp.pt, kp.octave);
-            }
-        }
+bool MCVSLAM::PoseEstimation::FilterCallBack_Chi2(const BAoptimizer::EdgeInfoMation &info) {
+    // std::unordered_set<MapPointRef> bad_mps;
+    auto e = info.first;
+    MapPointRef mp = info.second.first;
+    ObjectRef obj = info.second.second;
+    if (e->level() == 1) {
+        // level == 1 means this edge has been abort
+        return false;
+    }
+    e->computeError();
+    float chi2 = e->chi2();
+    const float thres_hold = (obj->name == CAM_NAME::R ? CHI2_STEREO_THRESHOLD : CHI2_MONO_THRESHOLD);
+    if (chi2 >= thres_hold) {
+        obj->DelMapPoint(mp);
+        e->setLevel(1);
+        return true;
+    }
+    return false;
+}
 
-        for (MapPointRef mp : kf->WIDE->GetMapPoints()) {
-            op.addMapppint(mp, fixed);
-            uint idx = kf->WIDE->GetMapPointIdx(mp);
-            cv::KeyPoint kp = kf->WIDE->kps[idx];
-            op.addEdgeToBody(kf, mp, kp.pt, kp.octave);
-        }
+bool MCVSLAM::PoseEstimation::ThisMapPointBeFix(MapPointRef mp, const std::unordered_set<KeyFrame> &kfs,
+                                                const std::unordered_set<KeyFrame> &fix_kfs) {
+    uint cnt_fix = 0, cnt_no_fix = 0;
+    for (auto _relative_kf : mp->GetAllKeyFrame()) {
+        if (kfs.count(_relative_kf))
+            cnt_no_fix += 1;
+        else if (fix_kfs.count(_relative_kf))
+            cnt_fix += 1;
     }
-    op.optimize(n_iter);
-    // filter call back
-    uint init_cnt_edge = op.getEdgeSize();
-    uint nBad = 0;
-    std::unordered_set<MapPointRef> bad_mps;
-    auto filter_callback = [&nBad](BAoptimizer::EdgeInfoMation info) {
-        auto e = info.first;
-        MapPointRef mp = info.second.first;
-        ObjectRef obj = info.second.second;
-        if (e->level() == 1) {
-            // level == 1 means this edge has been abort
-            return;
-        }
-        e->computeError();
-        float chi2 = e->chi2();
-        const float thres_hold = (obj->name == CAM_NAME::R ? CHI2_STEREO_THRESHOLD : CHI2_MONO_THRESHOLD);
-        if (chi2 >= thres_hold) {
-            obj->DelMapPoint(mp);
-            e->setLevel(1);
-            nBad++;
-        }
-    };
-    // op.filter(filter_callback);
-    uint success_edge = init_cnt_edge - nBad;
-    if (success_edge > 10) {
-        op.recovery_all();
-    }
-    return success_edge;
+    return (cnt_no_fix + 1) * 1. / (cnt_fix + 1) > 1.5 ? false : true;
 }

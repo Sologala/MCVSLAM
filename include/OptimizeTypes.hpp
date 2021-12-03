@@ -24,9 +24,9 @@ class EdgeSE3XYZ2CameraOnlyPose : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, 
     EdgeSE3XYZ2CameraOnlyPose(const cv::Mat Tcb, const cv::Mat XYZ, BaseCamera *_pCamera)
         : Pw(Converter::toVector3d(XYZ)), Tcb(Converter::toSE3Quat(Tcb)), cam(_pCamera) {}
     virtual ~EdgeSE3XYZ2CameraOnlyPose(){};
-    bool read(std::istream &is) {}
+    bool read(std::istream &is) { return true; }
 
-    bool write(std::ostream &os) const {}
+    bool write(std::ostream &os) const { return true; }
 
     void computeError() {
         const g2o::VertexSE3Expmap *v1 = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
@@ -73,9 +73,9 @@ class EdgeSE3XYZ2Camera : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::Ve
 
     EdgeSE3XYZ2Camera(const cv::Mat &_Tcb, BaseCamera *_camera) : Tcb(Converter::toSE3Quat(_Tcb)), cam(_camera) {}
     virtual ~EdgeSE3XYZ2Camera(){};
-    bool read(std::istream &is) {}
+    bool read(std::istream &is) { return true; }
 
-    bool write(std::ostream &os) const {}
+    bool write(std::ostream &os) const { return true; }
 
     void computeError() {
         const g2o::VertexSE3Expmap *Tbw = static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
@@ -123,9 +123,9 @@ class EdgeStereoSE3ProjectXYZ : public g2o::BaseBinaryEdge<3, Eigen::Vector3d, g
     EdgeStereoSE3ProjectXYZ(BaseCamera *_cam, const double _bf);
     virtual ~EdgeStereoSE3ProjectXYZ() {}
 
-    bool read(std::istream &is){};
+    bool read(std::istream &is) { return true; };
 
-    bool write(std::ostream &os) const {};
+    bool write(std::ostream &os) const { return true; };
 
     void computeError() {
         const g2o::VertexSE3Expmap *Tcw = static_cast<const g2o::VertexSE3Expmap *>(_vertices[1]);
