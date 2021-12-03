@@ -2,6 +2,7 @@
 #include <image_transport/image_transport.h>
 #include <ros/ros.h>
 #include <sensor_msgs/image_encodings.h>
+#include <std_msgs/Bool.h>
 
 #include <memory>
 #include <opencv2/core.hpp>
@@ -18,7 +19,15 @@ using namespace cv;
 using namespace std;
 using namespace MCVSLAM;
 
-int main(int argc, char **argv) {
+std::vector<shared_ptr<Capture>> caps;
+std::vector<image_transport::Publisher> pubs;
+
+void RessetCaptureCallBack(const std_msgs::Bool::ConstPtr& msg) {
+    for (auto& cap : caps) {
+        cap->reset();
+    }
+}
+int main(int argc, char** argv) {
     std::string configPath;
     std::string dataPath;
     cmdline::parser argPaser;
@@ -30,11 +39,13 @@ int main(int argc, char **argv) {
 
     ros::init(argc, argv, "capture_publisher");
     ros::NodeHandle nh;
+
     image_transport::ImageTransport it(nh);
 
     // 1. prepare capture
-    std::vector<shared_ptr<Capture>> caps;
-    std::vector<image_transport::Publisher> pubs;
+
+    auto ad_reset = nh.subscribe<std_msgs::Bool>("capture/reset", 1, &RessetCaptureCallBack);
+
     int fps = Capture::global_capture_config.fps;
     for (int i = 0; i < Capture::global_capture_config.capture_cnt; i++) {
         const string dataPath = Capture::global_capture_config.caps[i].source;

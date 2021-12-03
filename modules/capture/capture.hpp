@@ -15,7 +15,7 @@ class Capture {
     ~Capture();
 
     bool get(cv::Mat &img);
-
+    void reset();
     static CaptureConfig global_capture_config;
 
    private:

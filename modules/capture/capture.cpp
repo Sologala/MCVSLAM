@@ -160,6 +160,14 @@ bool Capture::get(cv::Mat &img) {
     return true;
 }
 
+void Capture::reset() {
+    img_path_idx = 0;
+    if (mode == Work_Mode::VIDEO_FILE) {
+        cap->release();
+        cap->open(file_name);
+    }
+}
+
 }  // namespace MCVSLAM
 
 namespace PATH_TEST {
