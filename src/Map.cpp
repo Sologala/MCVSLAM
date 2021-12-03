@@ -1,40 +1,46 @@
 #include "Map.hpp"
 
+#include <algorithm>
+#include <exception>
 #include <memory>
 #include <opencv2/core/types.hpp>
+#include <unordered_set>
 
+#include "BAoptimizer.hpp"
 #include "BaseCamera.hpp"
 #include "Converter.h"
 #include "Frame.hpp"
 #include "MapPoint.hpp"
 #include "Object.hpp"
 #include "Pinhole.hpp"
+#include "PoseEstimation.hpp"
 using namespace std;
 namespace MCVSLAM {
-
+uint Map::cnt_kf = 0, Map::used_kf = 0, Map::cnt_mp = 0, Map::used_mp = 0;
 Map::Map(std::string config_file) {
     Yaml::Node root;
     Yaml::Parse(root, config_file);
     connection_threshold = root["connection_threshold"].As<int>();
 }
 
-MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp) {
-    MapPoint* mp = new MapPoint(x, y, z, _desp, mp_id++);
-    // MapPointRef ret = std::make_shared<MapPoint>(x, y, z, _desp);
-    MapPointRef ret = std::shared_ptr<MapPoint>(mp);
-    return ret;
+MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint kf_id) {
+    // MapPoint* mp = new MapPoint(x, y, z, _desp, mp_id++);
+    // MapPointRef ret = std::shared_ptr<MapPoint>(mp);
+    cnt_mp += 1;
+    return make_shared<MapPoint>(x, y, z, _desp, kf_id, mp_id++);
 }
 
-MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp) {
+MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint kf_id) {
     assert(!xyz.empty() && xyz.rows == 3);
-    return CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp);
+    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, kf_id);
+    recent_created_mps.push_back(ref);
+    return ref;
 }
 
 FrameRef Map::CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right,
                           BaseCamera* cam_wide) {
-    Frame* pframe = new Frame(imgleft, imgright, imgwide, time_stamp, cam_left, cam_right, cam_wide, frame_id++);
-    FrameRef ret = std::shared_ptr<Frame>(pframe);
-    return ret;
+    cnt_kf += 1;
+    return new Frame(imgleft, imgright, imgwide, time_stamp, cam_left, cam_right, cam_wide, frame_id++);
 }
 
 void Map::AddKeyFrame(FrameRef frame) {
@@ -48,16 +54,49 @@ void Map::AddKeyFrame(FrameRef frame) {
             AddMapPoint(mpr);
         }
 
-    UpdataConnections(frame);
+    UpdateConnections(frame);
+
     frame->ComputeBow();
     // grab local map
-    auto local_kfs = GrabSubGraph_EssGraph(frame, 2);
+    auto local_kfs = GrabLocalMap_EssGraph(frame, 2);
 
     // create new mappoint
+    if (local_kfs.count(frame)) local_kfs.erase(frame);
+    for (auto kf : local_kfs) {
+        uint tri_left = TrangularizationTwoObject(kf->LEFT, frame->LEFT, kf, frame, kf->b, kf->u_right, frame->u_right);
+        uint tri_wide = TrangularizationTwoObject(kf->WIDE, frame->WIDE, kf, frame, kf->b);
+        fmt::print("Triangulized left: {}, wide {} \n", tri_left, tri_wide);
+    }
 
     // culling mappoint
+    for (uint i = 0, sz = recent_created_mps.size(); i < sz; i++) {
+        MapPointRef mp = recent_created_mps.front();
+        recent_created_mps.pop_front();
+        if (mp->isBad() || frame->id - mp->kf_id >= 3 || mp->GetAllObservation().size() == 0) {
+            DelMapPoint(mp);
+            continue;
+        } else {
+            recent_created_mps.push_back(mp);
+        }
+    }
+
+    Map::UpdateConnections(frame);
+    for (auto kf : local_kfs) {
+        Map::UpdateConnections(kf);
+    }
 
     // local ba
+    if (frame->id != 0) {
+        // Perform local ba
+        local_kfs = GrabLocalMap_Mappoint(frame, 3);
+        std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
+        local_kfs.insert(frame);
+        fmt::print("local_kfs {}, fix_kfs {}\n", local_kfs.size(), fix_local_kfs.size());
+        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 10, &PoseEstimation::FilterCallBack_Chi2);
+        for (const KeyFrame& kf : local_kfs) {
+            Map::UpdateConnections(kf);
+        }
+    }
 
     // update
 
@@ -98,6 +137,20 @@ void Map::DelMapPoint(MapPointRef mp) {
             obj->DelMapPoint(mp);
         }
     }
+}
+
+void Map::Clear() {
+    // 1. Must first free frames due to that The frame will automatically free relative mappoints
+    for (KeyFrame kf : all_keyframes) {
+        delete kf;
+    }
+    all_keyframes.clear();
+    WRITELOCK _lock(mtx_connection);
+    this->essential_gragh.clear();
+    this->parent_kf.clear();
+    this->loop_kfs.clear();
+    // 2. Then , the mappoints can be free without mem leaky!
+    all_mappoints.clear();
 }
 
 int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1, KeyFrame kf2, float min_baseline,
@@ -268,7 +321,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         // Triangulation is succesfull
 
-        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx));
+        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), kf2->id);
         cnt++;
         obj1->AddMapPoint(new_mp, m.queryIdx);
         obj2->AddMapPoint(new_mp, m.trainIdx);
@@ -314,10 +367,10 @@ int Map::MapPointSize() { return all_mappoints.size(); }
 
 int Map::KeyFrameSize() { return all_keyframes.size(); }
 
-void Map::UpdataConnections(KeyFrame kf) {
+void Map::UpdateConnections(KeyFrame kf) {
     WRITELOCK _lock(mtx_connection);
     std::unordered_map<KeyFrame, uint> kf_counter;
-    std::vector<MapPointRef> mps = kf->LEFT->GetMapPoints();
+    std::unordered_set<MapPointRef> mps = kf->LEFT->GetMapPoints();
 
     for (const MapPointRef& mp : mps) {
         for (const auto& ob : mp->GetAllObservation()) {
@@ -392,7 +445,7 @@ void Map::DelLoopConnection(KeyFrame kf0, KeyFrame kf1) {
     }
 }
 
-std::unordered_set<KeyFrame> Map::GrabSubGraph_EssGraph(KeyFrame kf, uint hop) {
+std::unordered_set<KeyFrame> Map::GrabLocalMap_EssGraph(KeyFrame kf, uint hop) {
     assert(hop >= 1);
 
     READLOCK _lock(mtx_connection);
@@ -416,7 +469,7 @@ std::unordered_set<KeyFrame> Map::GrabSubGraph_EssGraph(KeyFrame kf, uint hop) {
     return ret;
 }
 
-std::unordered_set<KeyFrame> Map::GrabSubGraph_Mappoint(FrameRef frame, uint hop) {
+std::unordered_set<KeyFrame> Map::GrabLocalMap_Mappoint(FrameRef frame, uint hop) {
     assert(hop >= 1);
     hop--;
     std::unordered_set<KeyFrame> ret;
@@ -444,14 +497,44 @@ std::unordered_set<KeyFrame> Map::GrabSubGraph_Mappoint(FrameRef frame, uint hop
     return ret;
 }
 
-std::unordered_set<MapPointRef> Map::GrabLocalMappoint(const std::unordered_set<KeyFrame>& local_kfs) {
+std::unordered_set<MapPointRef> Map::GrabLocalMappoint(const std::unordered_set<KeyFrame>& local_kfs, CAM_NAME name) {
     std::unordered_set<MapPointRef> ret;
     for (const KeyFrame& kf : local_kfs) {
-        for (auto mp : kf->LEFT->GetMapPoints()) {
-            ret.insert(mp);
+        if (name & CAM_NAME::L) {
+            for (const auto& mp : kf->LEFT->GetMapPoints()) {
+                ret.insert(mp);
+            }
+        }
+        if (name & CAM_NAME::W) {
+            for (const auto& mp : kf->WIDE->GetMapPoints()) {
+                ret.insert(mp);
+            }
         }
     }
     return ret;
+}
+
+std::unordered_set<KeyFrame> Map::GrabAnchorKeyFrames(std::unordered_set<KeyFrame>& kfs) {
+    // find the keyframe with minmial id
+    KeyFrame kf_min_id = nullptr;
+    for (KeyFrame _kf : kfs) {
+        if (kf_min_id == nullptr || kf_min_id->id > _kf->id) {
+            kf_min_id = _kf;
+        }
+    }
+    if (kf_min_id == nullptr) {
+        return {};
+    }
+
+    std::unordered_set<KeyFrame> kfs_min_id_one_hop = GrabLocalMap_EssGraph(kf_min_id, 1);
+    std::unordered_set<KeyFrame> kfs_anchor;
+    // find the keyframes which id is small than kfs' minmal id;
+    for (KeyFrame _kf : kfs_min_id_one_hop) {
+        if (_kf->id < kf_min_id->id) {
+            kfs_anchor.insert(_kf);
+        }
+    }
+    return kfs_anchor;
 }
 
 }  // namespace MCVSLAM

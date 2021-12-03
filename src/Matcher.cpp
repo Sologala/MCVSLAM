@@ -124,17 +124,10 @@ MatchResKnn Matcher::KnnMatch_cv(cv::InputArray desp1, cv::InputArray desp2, int
     return res;
 }
 
-std::vector<cv::DMatch> Matcher::BFMatch(const Keypoints& kp1, const Desps& desp1, const Keypoints& kp2, const Desps& desp2) {
-    std::vector<std::vector<cv::DMatch>> res;
-    Get_BF_Matcher(this->dis_mode)->knnMatch(desp1, desp2, res, 2);
-    // filter_out:
-    std::vector<cv::DMatch> good_res;
-    for (const auto& v_match : res) {
-        if (v_match[0].distance / v_match[1].distance < 0.6) {
-            good_res.push_back(v_match[0]);
-        }
-    }
-    return good_res;
+MatchRes Matcher::BFMatch(const Desps& desp1, const Desps& desp2) {
+    MatchRes res;
+    matcher_HAM->match(desp1, desp2, res);
+    return res;
 }
 
 MatchResKnn Matcher::DBowMatch(const Desps& desp1, const DBoW3::FeatureVector& bow_feat1, const Desps& desp2, const DBoW3::FeatureVector& bow_feat2) {
@@ -149,8 +142,8 @@ MatchResKnn Matcher::DBowMatch(const Desps& desp1, const DBoW3::FeatureVector& b
 
     while (f1_it != f1_it_end && f2_it != f2_it_end) {
         if (f1_it->first == f2_it->first) {
-            const vector<unsigned int> f1_kp_idxs = f1_it->second;
-            const vector<unsigned int> f2_kp_idxs = f2_it->second;
+            const vector<uint> f1_kp_idxs = f1_it->second;
+            const vector<uint> f2_kp_idxs = f2_it->second;
 
             // TODO 使用多线程加速
             for (uint f1_kp_idx : f1_kp_idxs) {
@@ -174,6 +167,7 @@ MatchResKnn Matcher::DBowMatch(const Desps& desp1, const DBoW3::FeatureVector& b
                     res.push_back({cv::DMatch(f1_kp_idx, d_idx[0], d[0]), cv::DMatch(f1_kp_idx, d_idx[1], d[1])});
                 }
             }
+
             f1_it++;
             f2_it++;
         } else if (f1_it->first < f2_it->first) {

@@ -14,11 +14,10 @@ namespace MCVSLAM {
 class Frame {
     friend class Map;
 
-   private:
+   public:
     Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right, BaseCamera* cam_wide,
           uint _id);
 
-   public:
     ~Frame();
     static int Parse(const std::string& config_file);
 
@@ -43,7 +42,7 @@ class Frame {
     static ORB extractor_left, extractor_right, extractor_wide;
     static cv::Mat Trl;
     static cv::Mat Twl;
-    static float b, bf;
+    static float b, bf, b_2;
 };
 
 }  // namespace MCVSLAM

@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <opencv2/core/types.hpp>
+#include <opencv2/features2d.hpp>
+#include <opencv2/highgui.hpp>
 #include <pyp/yaml/yaml.hpp>
 
 #include "Map.hpp"
@@ -9,6 +11,8 @@
 #include "Object.hpp"
 #include "Pinhole.hpp"
 #include "Vocabulary.h"
+#include "opencv2/core.hpp"
+#include "opencv2/highgui.hpp"
 #include "pyp/timer/timer.hpp"
 #include "thread_pool.hpp"
 using namespace std;
@@ -22,12 +26,13 @@ ORB Frame::extractor_wide;
 
 cv::Mat Frame::Trl;
 cv::Mat Frame::Twl;
-float Frame::b, Frame::bf;
+float Frame::b, Frame::bf, Frame::b_2;
 
 int extractORB(std::shared_ptr<Object> &obj, ORB *extractor) { return extractor->Extract(obj->img, obj->kps, obj->desps); }
 
 Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right, BaseCamera *cam_wide,
-             uint _id) {
+             uint _id)
+    : id(_id), time_stamp(time_stamp) {
     LEFT = std::make_shared<Object>(cam_left, imgleft, &extractor_left, CAM_NAME::L);
     RIGHT = std::make_shared<Object>(cam_left, imgright, &extractor_right, CAM_NAME::R);
     WIDE = std::make_shared<Object>(cam_left, imgwide, &extractor_wide, CAM_NAME::W);
@@ -50,7 +55,14 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     ComputeStereoMatch(LEFT, RIGHT);
 }
 
-Frame::~Frame() {}
+Frame::~Frame() {
+    for (auto obj : {this->LEFT, this->WIDE})
+        for (auto mp : obj->GetMapPoints()) {
+            mp->UnBindKeyFrame(this, obj);
+        }
+    Map::used_kf += 1;
+    fmt::print("kf {} is freed \n", this->id);
+}
 
 void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
     u_right = vector<float>(left->size(), -1.0f);
@@ -65,7 +77,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
     for (int iR = 0; iR < Nr; iR++) {
         const cv::KeyPoint &kp = right->kps[iR];
         const float &kpY = kp.pt.y;
-        const float r = 2.0f * extractor_left.mvScaleFactor[right->kps[iR].octave];
+        const float r = 10.f * extractor_left.mvScaleFactor[right->kps[iR].octave];
         const int maxr = ceil(kpY + r);
         const int minr = floor(kpY - r);
 
@@ -81,6 +93,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
     // For each left keypoint search a match in the right image
     vector<pair<int, int>> vDistIdx;
     vDistIdx.reserve(left->kps.size());
+    MatchRes match_res_recored;
 
     for (int iL = 0; iL < left->size(); iL++) {
         const cv::KeyPoint &kpL = left->kps[iL];
@@ -105,6 +118,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
         left_desps.push_back(dL);
         std::vector<cv::Mat> right_desps;
         std::vector<cv::KeyPoint> right_candi_kps;
+        std::vector<uint> ori_idx_right;
         // Compare descriptor to right keypoints
         for (size_t iC = 0; iC < vCandidates.size(); iC++) {
             const size_t iR = vCandidates[iC];
@@ -118,6 +132,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
                 const cv::Mat &dR = right->desps.row(iR);
                 right_desps.push_back(dR);
                 right_candi_kps.push_back(kpR);
+                ori_idx_right.push_back(iR);
             }
         }
         if (right_desps.size() == 0) continue;
@@ -125,6 +140,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
         // std::cout << cv::Mat(right_desps) << endl;
         MatchResKnn res_knn = Matcher::KnnMatch(left_desps, right_desps, 2);
         MatchRes res = res_knn.FilterRatio(0.6);
+
         // Subpixel match by correlation
         for (cv::DMatch &m : res) {
             // coordinates in image pyramid at keypoint scale
@@ -198,7 +214,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
                 // }
                 depth_left[iL] = bf / disparity;
                 u_right[iL] = bestuR;
-
+                match_res_recored.push_back(cv::DMatch(iL, ori_idx_right[bestIdxR], 0));
                 vDistIdx.push_back(pair<int, int>(bestDist, iL));
             }
         }
@@ -221,12 +237,17 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
         cnt = i;
     }
     fmt::print("matched {}\n", cnt);
+
+    // cv::Mat outimg;
+    // cv::drawMatches(LEFT->img, LEFT->kps, RIGHT->img, RIGHT->kps, match_res_recored, outimg);
+    // cv::imshow("outimg", outimg);
 }
 
 cv::Mat Frame::SetPose(cv::Mat Tcw) {
     LEFT->SetPose(Tcw);
     RIGHT->SetPose(Tcw * Trl);
     WIDE->SetPose(Tcw * Twl);
+    return Tcw;
 }
 
 cv::Mat Frame::GetPose() { return LEFT->GetPose(); }
@@ -240,7 +261,8 @@ int Frame::Parse(const std::string &config_file) {
     Yaml::Node root;
     Yaml::Parse(root, config_file);
     bf = root["bf"].As<float>();
-
+    b = root["baseline"].As<float>();
+    b_2 = b / 2;
     std::vector<float> temp;
     temp = root["Trl"].AsVector<float>();
     assert(temp.size() == 16);
@@ -256,4 +278,5 @@ int Frame::Parse(const std::string &config_file) {
     Object::voc.load(root["bow_vocabulary_path"].As<string>());
     return 0;
 }
+
 }  // namespace MCVSLAM

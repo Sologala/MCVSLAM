@@ -24,8 +24,8 @@ class PoseEstimation {
     static int PoseOptimization(const KeyFrame& frame);
 
     template <typename Filter_CallBack>
-    static int BoundAdjustment(const std::unordered_set<KeyFrame>& kfs, const std::unordered_set<KeyFrame>& fix_kfs, uint n_iter,
-                               Filter_CallBack&& Filter_CALLBACK);
+    static int BoundleAdjustment(const std::unordered_set<KeyFrame>& kfs, const std::unordered_set<KeyFrame>& fix_kfs, uint n_iter,
+                                 Filter_CallBack&& Filter_CALLBACK);
     // static cv::Mat _2d2d(ObjectRef obj1, ObjectRef obj2, const std::vector<cv::DMatch>& match_res);
     static bool FilterCallBack_Chi2(const BAoptimizer::EdgeInfoMation& info);
 
@@ -33,8 +33,8 @@ class PoseEstimation {
 };
 
 template <typename Filter_CallBack>
-inline int PoseEstimation::BoundAdjustment(const std::unordered_set<KeyFrame>& kfs, const std::unordered_set<KeyFrame>& fix_kfs, uint n_iter,
-                                           Filter_CallBack&& Filter_CALLBACK) {
+inline int PoseEstimation::BoundleAdjustment(const std::unordered_set<KeyFrame>& kfs, const std::unordered_set<KeyFrame>& fix_kfs, uint n_iter,
+                                             Filter_CallBack&& Filter_CALLBACK) {
     BAoptimizer op;
     for (const KeyFrame& kf : fix_kfs) {
         op.addKeyFrame(kf, true);

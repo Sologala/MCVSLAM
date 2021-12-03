@@ -2,10 +2,11 @@
 
 #include <opencv2/core/mat.hpp>
 
+#include "Frame.hpp"
 #include "Object.hpp"
 using namespace std;
 namespace MCVSLAM {
-MapPoint::MapPoint(double x, double y, double z, cv::Mat _desp, uint _id) : id(_id) {
+MapPoint::MapPoint(double x, double y, double z, cv::Mat _desp, uint _kf_id, uint _id) : id(_id), kf_id(_kf_id) {
     position_w = (cv::Mat_<float>(3, 1) << x, y, z);
     desp = _desp;
 }
@@ -13,6 +14,7 @@ MapPoint::MapPoint(double x, double y, double z, cv::Mat _desp, uint _id) : id(_
 MapPoint::~MapPoint() {
     WRITELOCK _lock(mtx_pos);
     WRITELOCK _lock1(mtx_feature);
+    Map::used_mp += 1;
 }
 
 const cv::Mat MapPoint::GetWorldPos() {
@@ -37,8 +39,8 @@ void MapPoint::BindKeyFrame(KeyFrame kf, ObjectRef obj) {
 
 void MapPoint::UnBindKeyFrame(KeyFrame kf, ObjectRef obj) {
     WRITELOCK _lock(mtx_feature);
-    if (relative_kfs[kf].count(obj) != 0) {
-        relative_kfs[kf].erase(obj);
+    if (relative_kfs.count(kf)) {
+        if (relative_kfs[kf].count(obj)) relative_kfs[kf].erase(obj);
         if (relative_kfs[kf].size() == 0) {
             relative_kfs.erase(kf);
         }
@@ -115,6 +117,15 @@ void MapPoint::ComputeDistinctiveDescriptors() {
     }
 }
 
+bool MapPoint::isBad() {
+    READLOCK _lock(mtx_feature);
+    return is_bad;
+}
+
+void MapPoint::SetBad() {
+    WRITELOCK _lock(mtx_feature);
+    is_bad = true;
+}
 void MapPoint::UpdateNormalVector() {
     Observation obs = GetAllObservation();
     cv::Mat pos = GetWorldPos();

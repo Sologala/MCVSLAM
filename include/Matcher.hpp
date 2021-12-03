@@ -56,7 +56,7 @@ class Matcher {
     // MatchRes Match(cv::InputArray desp1, cv::InputArray desp2);
     static MatchResKnn KnnMatch_cv(cv::InputArray desp1, cv::InputArray desp2, int k = 2);
 
-    std::vector<cv::DMatch> BFMatch(const Keypoints& kp1, const Desps& desp1, const Keypoints& kp2, const Desps& desp2);
+    static MatchRes BFMatch(const Desps& desp1, const Desps& desp2);
     static MatchResKnn DBowMatch(const Desps& desp1, const DBoW3::FeatureVector& bow_feat1, const Desps& desp2,
                                  const DBoW3::FeatureVector& bow_feat2);
 

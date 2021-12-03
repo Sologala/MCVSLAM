@@ -32,174 +32,48 @@ class Grid : public std::vector<std::vector<std::vector<std::size_t>>> {
 
 class Object {
    public:
-    virtual ~Object(){};
+    virtual ~Object();
     Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, ORB *_extractor, CAM_NAME name);
 
     // ---------------------[Statistic] ----------------------
     size_t size() const { return kps.size(); }
 
+    size_t MapPointSize();
+
+    // Covisibility
+    uint Covisibility(const ObjectRef &other);
+
     // ---------------------[Pose] ----------------------
     // Set the camera pose. (Imu pose is not modified!)
 
-    void SetPose(cv::Mat Tcw) {
-        WRITELOCK lock(mtxPose);
-        // std::unique_lock<std::mutex> lock(mtxPose);
-        mTcw = Tcw.clone();
-        UpdatePoseMatrix();
-    }
+    void SetPose(cv::Mat Tcw);
 
-    cv::Mat GetPose() {
-        READLOCK lock(mtxPose);
-        // std::unique_lock<std::mutex> lock(mtxPose);
-        return mTcw.clone();
-    }
-    cv::Mat GetPoseInverse() {
-        READLOCK lock(mtxPose);
-        // std::unique_lock<std::mutex> lock(mtxPose);
-        return mTwc.clone();
-    }
-    cv::Mat GetCameraCenter() {
-        READLOCK lock(mtxPose);
-        // std::unique_lock<std::mutex> lock(mtxPose);
-        return mOw.clone();
-    }
-    cv::Mat GetRotation() {
-        READLOCK lock(mtxPose);
-        // std::unique_lock<std::mutex> lock(mtxPose);
-        return mRcw.clone();
-    }
-    cv::Mat GetTranslation() {
-        READLOCK lock(mtxPose);
-        // std::unique_lock<std::mutex> lock(mtxPose);
-        return mtcw.clone();
-    }
+    cv::Mat GetPose();
+    cv::Mat GetPoseInverse();
+    cv::Mat GetCameraCenter();
+    cv::Mat GetRotation();
+    cv::Mat GetTranslation();
+
     // ------------------------[Map Points]--------------------
+    void clear();
 
-    std::vector<MapPointRef> GetMapPoints() {
-        std::vector<MapPointRef> ret;
-        {
-            UNIQUELOCK lock(mtxMapPoints);
-            for (const std::pair<MapPointRef, size_t> &p : mMP2IDX) {
-                ret.push_back(p.first);
-            }
-        }
-        return ret;
-    }
+    bool count(MapPointRef pMP);
+    bool count(size_t idx);
 
-    void clear() {
-        UNIQUELOCK lock(mtxMapPoints);
-        mMP2IDX.clear();
-        mIDX2MP.clear();
-    }
+    std::vector<MapPointRef> GetMapPointsVector();
+    std::unordered_set<MapPointRef> GetMapPoints();
 
-    bool count(MapPointRef pMP) {
-        if (pMP == NULL) return false;
-        UNIQUELOCK lock(mtxMapPoints);
-        if (mMP2IDX.count(pMP) == 0) return false;
-        return true;
-    }
-    bool count(size_t idx) {
-        if (idx < 0 || idx >= size()) return false;
-        UNIQUELOCK lock(mtxMapPoints);
-        if (mIDX2MP.count(idx) == 0) return false;
-        return true;
-    }
+    size_t GetMapPointIdx(MapPointRef pMP);
 
-    size_t GetMapPointIdx(MapPointRef pMP) {
-        if (pMP == NULL) {
-            fmt::print("NULL pMP \n");
-            while (1)
-                ;
-            return -1;
-        }
-        UNIQUELOCK lock(mtxMapPoints);
-        //	data_check();
-        if (mMP2IDX.count(pMP) == 0) {
-            fmt::print("Not exist \n");
-            while (1)
-                ;
-            return -1;
-        }
+    MapPointRef GetMapPoint(size_t idx);
 
-        size_t idx = mMP2IDX[pMP];
-        if (mIDX2MP.count(idx) == 0 || mIDX2MP[idx] != pMP) {
-            fmt::print("Info not correct \n");
-            while (1)
-                ;
-            return -1;
-        }
+    void AddMapPoint(MapPointRef pMP, size_t idx);
 
-        return idx;
-    }
+    void replaceMapPoint(MapPointRef pMP, MapPointRef pMP1);
 
-    MapPointRef GetMapPoint(size_t idx) {
-        UNIQUELOCK lock(mtxMapPoints);
-        if (idx >= size() || mIDX2MP.count(idx) == 0) return NULL;
-        //	data_check();
+    void DelMapPoint(size_t idx);
 
-        MapPointRef pMP = mIDX2MP[idx];
-        if (mMP2IDX.count(pMP) == 0 || mMP2IDX[pMP] != idx) return NULL;
-        return pMP;
-    }
-
-    void AddMapPoint(MapPointRef pMP, size_t idx) {
-        if (idx >= size() || pMP == NULL) return;
-        {
-            UNIQUELOCK lock(mtxMapPoints);
-            if (mMP2IDX.count(pMP) || mIDX2MP.count(idx)) {
-                // check distance
-                uint dist_ori = HammingDistance(pMP->GetDesp(), desps.row(idx));
-                uint dist_new = HammingDistance(mIDX2MP[idx]->GetDesp(), desps.row(idx));
-                if (dist_new < dist_ori) {
-                    // double delete for force guaranty
-                    DelMapPoint(pMP);
-                    DelMapPoint(idx);
-                } else {
-                    // do nothing
-                    return;
-                }
-            }
-            mIDX2MP[idx] = pMP;
-            mMP2IDX[pMP] = idx;
-        }
-    }
-
-    void replaceMapPoint(MapPointRef pMP, MapPointRef pMP1) {
-        if (pMP == NULL || pMP1 == NULL) return;
-        if (count(pMP) == false) return;
-        UNIQUELOCK lock(mtxMapPoints);
-        size_t idx_ori = mMP2IDX[pMP];
-        mIDX2MP.erase(idx_ori);
-        mMP2IDX.erase(pMP);
-
-        mIDX2MP[idx_ori] = pMP1;
-        mMP2IDX[pMP1] = idx_ori;
-        //	data_check();
-    }
-
-    void DelMapPoint(size_t idx) {
-        if (idx >= size()) return;
-        UNIQUELOCK lock(mtxMapPoints);
-        // std::unique_lock<std::mutex> lock(mtxMapPoints);
-        if (mIDX2MP.count(idx) == 0) return;
-        MapPointRef pMP = mIDX2MP[idx];
-        mIDX2MP.erase(idx);
-        mMP2IDX.erase(pMP);
-    }
-
-    void DelMapPoint(MapPointRef pMP) {
-        if (pMP == NULL) return;
-        UNIQUELOCK lock(mtxMapPoints);
-        if (mMP2IDX.count(pMP) == 0) return;
-        size_t idx = mMP2IDX[pMP];
-        mIDX2MP.erase(idx);
-        mMP2IDX.erase(pMP);
-    }
-    size_t MapPointSize() {
-        UNIQUELOCK lock(mtxMapPoints);
-        size_t ret = mMP2IDX.size();
-        return ret;
-    }
+    void DelMapPoint(MapPointRef pMP);
 
     // mappoint normal & median depth
     float ComputeSceneMedianDepth();
@@ -218,8 +92,8 @@ class Object {
     void AssignFeaturesToGrid();
 
     //  project a bunch of mappoints to this frame with current pose;
-    void ProjectBunchMapPoints(const std::vector<MapPointRef> &mps, float r_threshold = 5);
-    void ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, float r_threshold = 5);
+    uint ProjectBunchMapPoints(const std::vector<MapPointRef> &mps, float r_threshold = 5);
+    uint ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, float r_threshold = 5);
 
     // Bow index
     void ComputeBow();
@@ -229,28 +103,23 @@ class Object {
     void UpdatePoseMatrix();
 
    protected:
-    boost::mutex mtxMapPoints;
-    boost::shared_mutex mtxPose;  // for pose
+    boost::mutex mtx_mps;
+    boost::shared_mutex mtx_pose;  // for pose
 
    public:
     CAM_NAME name;
     BaseCamera *mpCam;
-    cv::Mat img;
 
+    cv::Mat img;
     cv::Rect bounddingbox;
 
     Keypoints kps;
     Desps desps;
 
     // Bow index
+    bool is_bowed = false;
     DBoW3::BowVector bow_vector;
     DBoW3::FeatureVector bow_feature;
-
-    // Sparse storage;
-    std::vector<size_t> idxs;
-    std::vector<MapPointRef> MPs;
-    //  for recored the outliers MapPoints.
-    std::unordered_set<MapPointRef> mOutliers;
 
     static DBoW3::Vocabulary voc;
     ORB *extractor;
@@ -260,8 +129,10 @@ class Object {
     float grid_width_inv;
     float grid_height_inv;
 
+    // MapPoint observation
     std::unordered_map<MapPointRef, size_t> mMP2IDX;
     std::unordered_map<size_t, MapPointRef> mIDX2MP;
+    std::unordered_set<MapPointRef> all_mps;
 
     // ------------[cam parameter]------------
     // Calibration parameters
