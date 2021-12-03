@@ -17,6 +17,7 @@ link_libraries(pyp::fmt pyp::timer pyp::yaml pyp::cmdline)
 
 add_subdirectory(modules)
 file(GLOB src_file "./src/*.c*")
+
 add_library(MCVSLAM ${src_file})
 
 target_include_directories(MCVSLAM  PUBLIC

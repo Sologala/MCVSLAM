@@ -5,44 +5,34 @@
 #include <ros/ros.h>
 #include <unistd.h>
 
-#include <deque>
 #include <iostream>
-#include <memory>
 #include <opencv2/core.hpp>
-#include <opencv2/core/mat.hpp>
-#include <opencv2/core/types.hpp>
-#include <opencv2/features2d.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
 #include <string>
-#include <type_traits>
 
-#include "BaseCamera.hpp"
 #include "Frame.hpp"
 #include "Map.hpp"
 #include "MapPoint.hpp"
 #include "Matcher.hpp"
-#include "Object.hpp"
+#include "ORBExtractor.hpp"
 #include "Pinhole.hpp"
-#include "PoseEstimation.hpp"
 #include "Tracker.hpp"
 #include "capture/capture.hpp"
 #include "image_transport/subscriber.h"
-#include "local_feature/ORB/ORBExtractor.hpp"
-#include "local_feature/SURF/SURFExtractor.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/opencv.hpp"
 #include "osg_viewer.hpp"
 #include "pyp/fmt/fmt.hpp"
 #include "pyp/timer/timer.hpp"
+#include "ros/publisher.h"
 #include "ros/subscriber.h"
 #include "ros_msgs/include/multi_msg_wraper.hpp"
 #include "sensor_msgs/Image.h"
 #include "sensor_msgs/PointCloud.h"
+#include "std_msgs/Bool.h"
 using namespace std;
 using namespace MCVSLAM;
 BaseExtractor *extractor;
+
+ros::Publisher resset_pub;
+std_msgs::Bool reset_msg;
 
 int idx_number_kps;
 int tic = 0;
@@ -53,7 +43,6 @@ cv::Mat velocity;
 std::queue<FrameRef> localMap;
 Pinhole cam_left("/home/wen/SLAM/MCVSLAM/config/camleft.yaml"), cam_wide("/home/wen/SLAM/MCVSLAM/config/camwide.yaml");
 Tracker tracker(&_map, &viewer);
-
 void track(std::vector<cv::Mat> &imgs, double time_stamp) {
     // 1.construct Frame
     std::vector<cv::Mat> imggrays(3);
@@ -63,8 +52,11 @@ void track(std::vector<cv::Mat> &imgs, double time_stamp) {
     }
 
     FrameRef cur_frame = _map.CreateFrame(imggrays[0], imggrays[1], imggrays[2], time_stamp, &cam_left, &cam_left, &cam_wide);
-
-    tracker.Track(cur_frame);
+    MCVSLAM::Track_State state = tracker.Track(cur_frame);
+    if (state == Track_State::LOST) {
+        reset_msg.data = true;
+        resset_pub.publish(reset_msg);
+    }
 }
 
 void imageCallback(const sensor_msgs::ImageConstPtr &img_left, const sensor_msgs::ImageConstPtr &img_right,
@@ -94,9 +86,12 @@ int main(int argc, char **argv) {
     sync.registerCallback(boost::bind(&imageCallback, _1, _2, _3));
 
     ros::Publisher pcl_pub = nh.advertise<sensor_msgs::PointCloud>("showpointcloud_output", 1);
-
+    resset_pub = nh.advertise<std_msgs::Bool>("capture/reset", 1);
+    reset_msg.data = true;
+    resset_pub.publish(reset_msg);
     // image_transport::Subscriber sub = it.subscribe("left/image", 1, imageCallback);
     //  pub = it.advertise(PedDet::global_config::gcfg.topic_oup_detection_result,);
+
     ros::spin();
     ros::shutdown();
     viewer.RequestStop();
