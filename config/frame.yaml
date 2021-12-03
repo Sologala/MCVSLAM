@@ -1,7 +1,7 @@
 Trl: 1.  0.  0.  1.0  0.  1.  0.  0.  0.  0.  1.  0.  0. 0.  0.  1.
 Twl: 1.  0.  0.  0.5  0.  1.  0.  0.  0.  0.  1.  0.  0.  0.  0.  1.
 bf: 955.40503
-
+baseline: 1.0
 
 left_extractor_path: "./extractor.yaml"
 right_extractor_path: "./extractor.yaml"
