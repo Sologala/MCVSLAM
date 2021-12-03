@@ -8,8 +8,10 @@
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/Group>
+#include <osg/MatrixTransform>
 #include <osg/Node>
 #include <osg/NodeVisitor>
+#include <osg/Transform>
 #include <osg/ref_ptr>
 #include <osgViewer/Viewer>
 #include <queue>
@@ -27,7 +29,7 @@ class osg_viewer {
     void Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b);
     void DrawCam(const cv::Mat Twc, uint r, uint g, uint b);
     void Commit();
-    void ShowTracjtory(const std::string& tracj_file, osg::Vec4 color);
+    osg::Matrixd ShowTracjtory(const std::string& tracj_file, osg::Vec4 color);
 
    public:
     bool IsStoped();
@@ -51,7 +53,8 @@ class osg_viewer {
     osg::ref_ptr<osg::Group> scene;
     osg::ref_ptr<osgViewer::Viewer> viewer;
     osg::ref_ptr<osg::Group> draw_buffer[2];
-    osg::ref_ptr<osg::Group> points_cams;
+    osg::ref_ptr<osg::MatrixTransform> points_cams;
+    osg::ref_ptr<osg::MatrixTransform> points_cams_align;
     osg::ref_ptr<osg::Group> ground_trugh_traj;
 
     // double buffer queue

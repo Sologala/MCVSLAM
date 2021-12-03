@@ -17,13 +17,18 @@
 #include <osg/Geometry>
 #include <osg/Group>
 #include <osg/Image>
+#include <osg/Light>
+#include <osg/LightModel>
+#include <osg/LightSource>
 #include <osg/LineWidth>
+#include <osg/Math>
 #include <osg/Matrix>
 #include <osg/MatrixTransform>
 #include <osg/Matrixd>
 #include <osg/Node>
 #include <osg/NodeVisitor>
 #include <osg/Point>
+#include <osg/Quat>
 #include <osg/ShapeDrawable>
 #include <osg/Transform>
 #include <osg/Vec3>
@@ -105,7 +110,7 @@ void osg_viewer::Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b) {
 
     for (int i = 0, sz = mps.size(); i < sz; i++) {
         auto ptr = mps[i].ptr<float>(0);
-        v->push_back(osg::Vec3(*ptr, *(ptr + 1), -*(ptr + 2)));
+        v->push_back(osg::Vec3(*ptr, -*(ptr + 1), -*(ptr + 2)));
         // fmt::print("{} {} {}\n", *ptr, *(ptr + 1), *(ptr + 2));
         colors->push_back(osg::Vec3(r, g, b));
     }
@@ -131,7 +136,7 @@ void osg_viewer::Commit() {
         draw_buffer[draw_idx]->removeChild(0, draw_buffer[draw_idx]->getNumChildren());
     }
 }
-void osg_viewer::ShowTracjtory(const std::string &tracj_file, osg::Vec4 color) {
+osg::Matrixd osg_viewer::ShowTracjtory(const std::string &tracj_file, osg::Vec4 color) {
     // load from file
     ifstream ifs(tracj_file);
     std::string line;
@@ -139,6 +144,7 @@ void osg_viewer::ShowTracjtory(const std::string &tracj_file, osg::Vec4 color) {
     osg::Vec3d init;
     osg::ref_ptr<osg::Vec4dArray> vecColor1 = new osg::Vec4dArray();
     std::vector<osg::Vec3d> vpose;
+    std::vector<osg::Quat> vquats;
     while (getline(ifs, line)) {
         int64_t timeStamps;
         char strTime[256] = {};
@@ -159,6 +165,7 @@ void osg_viewer::ShowTracjtory(const std::string &tracj_file, osg::Vec4 color) {
         // p = rot * p;
         nFrams += 1;
         vpose.push_back(p);
+        vquats.push_back(q);
         vecColor1->push_back(color);
     }
 
@@ -174,6 +181,9 @@ void osg_viewer::ShowTracjtory(const std::string &tracj_file, osg::Vec4 color) {
     geometry->setVertexArray(vecarry1.get());
     geometry->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINE_STRIP, 0, vecarry1->size()));
     ground_trugh_traj->addChild(geometry);
+
+    auto T = osg::Matrixd(vquats[0]) * osg::Matrixd::translate(vpose[0]);
+    return T;
 }
 
 bool osg_viewer::IsStoped() {
@@ -333,7 +343,8 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     draw_buffer[0] = new osg::Group();
     draw_buffer[1] = new osg::Group();
     ground_trugh_traj = new osg::Group();
-    points_cams = new osg::Group();
+    points_cams = new osg::MatrixTransform();
+    points_cams_align = new osg::MatrixTransform();
     Parse(config_file);
     node_environment = new osg::Group();
     if (is_show_model) {
@@ -342,6 +353,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
         osg::ref_ptr<osg::MatrixTransform> tf = new osg::MatrixTransform();
         tf->setMatrix(osg::Matrix::translate(osg::Vec3(0, 0, -vcenter[2])));
         tf->addChild(model);
+
         node_environment->addChild(tf);
     }
 
@@ -350,7 +362,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
     // Set Background color
     viewer->getCamera()->setClearColor(osg::Vec4(1, 1, 1, 0));
-
+    viewer->setLightingMode(osg::View::LightingMode::NO_LIGHT);
     // Add model to viewer
     scene = new osg::Group;
 
@@ -359,12 +371,18 @@ osg_viewer::osg_viewer(const std::string &config_file) {
         scene->addChild(node_environment);
     }
 
-    // create points and cams
-    scene->addChild(points_cams);
-
     // load ground truth traj
-    ShowTracjtory(gt_tracj_path, osg::Vec4(0, 100, 225, 100));
+    osg::Matrixd tf = ShowTracjtory(gt_tracj_path, osg::Vec4(0, 100, 225, 100));
+    // tf = osg::Matrixd::inverse(tf);
     scene->addChild(ground_trugh_traj);
+    osg::Matrixd tft;
+    // tf.transpose(tft);
+    points_cams_align->setMatrix(tf);
+    // points_cams->setMatrix(osg::Matrix(osg::Quat(0, 1, 0, 0)));
+    points_cams_align->addChild(points_cams);
+
+    // create points and cams
+    scene->addChild(points_cams_align);
 
     viewer->setUpViewInWindow(wnd_rect.x, wnd_rect.y, wnd_rect.width, wnd_rect.height);
     // viewer->setCameraManipulator(nullptr);
