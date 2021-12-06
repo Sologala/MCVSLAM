@@ -28,12 +28,15 @@ class osg_viewer {
     void Draw(const cv::Mat mps, uint r, uint g, uint b);
     void Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b);
     void DrawCam(const cv::Mat Twc, uint r, uint g, uint b);
+    void SetCurViewFollow(const cv::Mat Twc);
     void Commit();
     osg::Matrixd ShowTracjtory(const std::string& tracj_file, osg::Vec4 color);
 
    public:
     bool IsStoped();
     void RequestStop();
+
+    void DrawCams(const std::vector<cv::Mat>& Twcs, uint r, uint g, uint b);
 
    private:
     void Parse(std::string config_file);

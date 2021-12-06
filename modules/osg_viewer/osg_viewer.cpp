@@ -83,7 +83,7 @@ void osg_viewer::Draw(const cv::Mat mps, uint r, uint g, uint b) {
     osg::ref_ptr<osg::Vec3Array> colors = new osg::Vec3Array();
     for (int i = 0, sz = mps.rows; i < sz; i++) {
         const cv::Point3f *ptr = mps.ptr<cv::Point3f>(i);
-        v->push_back(osg::Vec3(ptr->x, ptr->y, ptr->z));
+        v->push_back(osg::Vec3(ptr->x, -ptr->y, -ptr->z));
         colors->push_back(osg::Vec3(r, g, b));
     }
     geom->setVertexArray(v);
@@ -196,6 +196,14 @@ void osg_viewer::RequestStop() {
     is_request_stop = true;
 }
 
+void osg_viewer::DrawCams(const std::vector<cv::Mat> &Twcs, uint r, uint g, uint b) {
+    fmt::print("draw {} keyframes \n", Twcs.size());
+    for (cv::Mat Twc : Twcs) {
+        DrawCam(Twc, r, g, b);
+    }
+    if (Twcs.size()) SetCurViewFollow(Twcs.back());
+}
+
 void osg_viewer::DrawCam(cv::Mat Twc, uint r, uint g, uint b) {
     osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
     osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
@@ -252,12 +260,27 @@ void osg_viewer::DrawCam(cv::Mat Twc, uint r, uint g, uint b) {
     geode->addDrawable(geom.get());
 
     osg::ref_ptr<osg::MatrixTransform> trans = new osg::MatrixTransform();
-    osg::Matrixd t = osg::Matrixd::translate(0, 0, 100);
-    cv::transpose(Twc, Twc);
-    osg::Matrixd mat(Twc.ptr<float>());
+    cv::Mat t = Twc.rowRange(0, 3).col(3);
+    osg::Matrixd t_ = osg::Matrixd::translate(t.at<float>(0), -t.at<float>(1), -t.at<float>(2));
+    cv::Mat R = Twc.rowRange(0, 3).col(3);
+    cv::Mat Twc_t;
+    cv::transpose(Twc, Twc_t);
+    osg::Matrixd mat(Twc_t.ptr<float>());
+    osg::Matrixd cam_pose = osg::Matrixd(mat.getRotate()) * t_;
     trans->addChild(geode);
-    trans->setMatrix(mat);
+    trans->setMatrix(cam_pose);
     draw_buffer[draw_idx]->addChild(trans);
+}
+
+void osg_viewer::SetCurViewFollow(const cv::Mat Twc) {
+    cv::Mat t = Twc.rowRange(0, 3).col(3);
+    osg::Matrixd t_ = osg::Matrixd::translate(-t.at<float>(0), t.at<float>(1), -t.at<float>(2) - 400);
+    cv::Mat R = Twc.rowRange(0, 3).col(3);
+    cv::Mat Twc_t;
+    cv::transpose(Twc, Twc_t);
+    osg::Matrixd mat(Twc_t.ptr<float>());
+    osg::Matrixd cam_pose = osg::Matrixd(mat.getRotate()) * t_;
+    viewer->getCameraManipulator()->setByInverseMatrix(cam_pose);
 }
 
 osg::ref_ptr<osg::Node> osg_viewer::CreateCoordinate() {
