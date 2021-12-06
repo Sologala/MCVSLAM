@@ -2,16 +2,21 @@
 
 
 
-
+# Feature
+- Multi camera hierarchical optimization based on multi resolution cameras observation.
+- A multi thread Framework similar to ORB_SLAM but more simple and readable.
+- Unified Matching and Optimizing process to reduce code redundancy
 
 
 # Dependency 
 - [fmt](https://github.com/fmtlib/fmt) **For Log and formating console output**
 - [cmdline](https://github.com/tanakh/cmdline)
-- [yaml](https://github.com/jimmiebergmann/mini-yaml) **Baseed with it , and suooport parse array type.**
+- [yaml](https://github.com/jimmiebergmann/mini-yaml) **Base with it , and suooport parse array type.**
 - [ROS melodic](http://wiki.ros.org/melodic/Installation/Ubuntu) 
 - [opencv](https://github.com/opencv/opencv) 4+  with  [contrib](https://github.com/opencv/opencv_contrib)
 - [Open Scene Graph](https://github.com/openscenegraph/OpenSceneGraph)
+
+
 
 # TODO 
 - [X] [Capture](./modules/capture/README.md)
