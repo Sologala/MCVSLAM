@@ -108,7 +108,7 @@ void BAoptimizer::addEdgeToBody(const KeyFrame &kf, const MapPointRef &mp, const
 
 void BAoptimizer::optimize(const int n) {
     g2o::SparseOptimizer::initializeOptimization();
-    fmt::print("vertex {} , edges {}\n", g2o::SparseOptimizer::_vertices.size(), g2o::SparseOptimizer::_edges.size());
+    // fmt::print("vertex {} , edges {}\n", g2o::SparseOptimizer::_vertices.size(), g2o::SparseOptimizer::_edges.size());
     g2o::SparseOptimizer::optimize(n);
 }
 

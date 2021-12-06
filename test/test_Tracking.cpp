@@ -19,20 +19,15 @@
 #include "capture/capture.hpp"
 #include "image_transport/subscriber.h"
 #include "osg_viewer.hpp"
+#include "pyp/cmdline/cmdline.h"
 #include "pyp/fmt/fmt.hpp"
 #include "pyp/timer/timer.hpp"
-#include "ros/publisher.h"
-#include "ros/subscriber.h"
-#include "ros_msgs/include/multi_msg_wraper.hpp"
-#include "sensor_msgs/Image.h"
-#include "sensor_msgs/PointCloud.h"
-#include "std_msgs/Bool.h"
+#include "ros/init.h"
 using namespace std;
 using namespace MCVSLAM;
+std::vector<shared_ptr<Capture>> caps;
+std::vector<image_transport::Publisher> pubs;
 BaseExtractor *extractor;
-
-ros::Publisher resset_pub;
-std_msgs::Bool reset_msg;
 
 int idx_number_kps;
 int tic = 0;
@@ -46,30 +41,11 @@ Tracker tracker(&_map, &viewer);
 void track(std::vector<cv::Mat> &imgs, double time_stamp) {
     // 1.construct Frame
     std::vector<cv::Mat> imggrays(3);
-
     for (int i = 0, sz = imgs.size(); i < sz; i++) {
         cv::cvtColor(imgs[i], imggrays[i], cv::COLOR_BGR2GRAY);
     }
-
     FrameRef cur_frame = _map.CreateFrame(imggrays[0], imggrays[1], imggrays[2], time_stamp, &cam_left, &cam_left, &cam_wide);
     MCVSLAM::Track_State state = tracker.Track(cur_frame);
-    if (state == Track_State::LOST) {
-        reset_msg.data = true;
-        resset_pub.publish(reset_msg);
-    }
-}
-
-void imageCallback(const sensor_msgs::ImageConstPtr &img_left, const sensor_msgs::ImageConstPtr &img_right,
-                   const sensor_msgs::ImageConstPtr &img_wide) {
-    try {
-        // cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
-        std::vector<cv::Mat> imgs = {MsgWraper::rosMat2cvMat(img_left), MsgWraper::rosMat2cvMat(img_right), MsgWraper::rosMat2cvMat(img_wide)};
-        double time_stamp = img_left->header.stamp.toSec();
-        // test_performance(img);
-        track(imgs, time_stamp);
-    } catch (cv_bridge::Exception &e) {
-        // ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
-    }
 }
 
 int main(int argc, char **argv) {
@@ -77,23 +53,39 @@ int main(int argc, char **argv) {
     // extractor = new SURF();
     extractor = new ORB("../config/extractor.yaml");
     viewer.Start();
-    ros::init(argc, argv, "test_node_orb_extractor");
+    cmdline::parser argPaser;
+    argPaser.add<string>("configPath", 'c', "config Path", false, "../config/capture.yaml");
+    argPaser.parse_check(argc, argv);
+    ros::init(argc, argv, "dasfasdf");
     ros::NodeHandle nh;
-    message_filters::Subscriber<sensor_msgs::Image> sub_left(nh, Capture::global_capture_config.caps[0].topic, 1);
-    message_filters::Subscriber<sensor_msgs::Image> sub_right(nh, Capture::global_capture_config.caps[1].topic, 1);
-    message_filters::Subscriber<sensor_msgs::Image> sub_wide(nh, Capture::global_capture_config.caps[2].topic, 1);
-    message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> sync(sub_left, sub_right, sub_wide, 10);
-    sync.registerCallback(boost::bind(&imageCallback, _1, _2, _3));
+    image_transport::ImageTransport it(nh);
+    int fps = Capture::global_capture_config.fps;
+    for (int i = 0; i < Capture::global_capture_config.capture_cnt; i++) {
+        const string dataPath = Capture::global_capture_config.caps[i].source;
+        fmt::print("{} source : {} \n", i, dataPath);
+        if (dataPath.size() == 1 && dataPath[0] != '.') {
+            stringstream ss(dataPath);
+            int id = 0;
+            ss >> id;
+            caps.emplace_back(make_shared<Capture>(id));
+        } else {
+            caps.emplace_back(make_shared<Capture>(dataPath));
+        }
+        pubs.emplace_back(it.advertise(Capture::global_capture_config.caps[i].topic, 1));
+    }
+    while (1) {
+        ros::Time time_stamp = ros::Time::now();
+        std::vector<cv::Mat> imgs(3);
+        for (int i = 0; i < Capture::global_capture_config.capture_cnt; i++) {
+            bool res = caps[i]->get(imgs[i]);
+            auto publisher = pubs[i];
+            sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", imgs[i]).toImageMsg();
+            msg->header.stamp = time_stamp;
+            publisher.publish(msg);
+        }
+        track(imgs, time_stamp.toSec());
+    }
 
-    ros::Publisher pcl_pub = nh.advertise<sensor_msgs::PointCloud>("showpointcloud_output", 1);
-    resset_pub = nh.advertise<std_msgs::Bool>("capture/reset", 1);
-    reset_msg.data = true;
-    resset_pub.publish(reset_msg);
-    // image_transport::Subscriber sub = it.subscribe("left/image", 1, imageCallback);
-    //  pub = it.advertise(PedDet::global_config::gcfg.topic_oup_detection_result,);
-
-    ros::spin();
-    ros::shutdown();
     viewer.RequestStop();
     while (viewer.IsStoped()) {
         usleep(3000);

@@ -46,6 +46,7 @@ class Map {
 
     // statistics
     std::vector<cv::Mat> GetAllMappointsForShow();
+    std::vector<cv::Mat> GetAllKeyFrameForShow();
     int MapPointSize();
     int KeyFrameSize();
 

@@ -1,6 +1,7 @@
 #include "Object.hpp"
 
 #include <cstddef>
+#include <opencv2/core.hpp>
 #include <opencv2/core/types.hpp>
 #include <type_traits>
 
@@ -217,18 +218,21 @@ void Object::AddMapPoint(MapPointRef pMP, size_t idx) {
 }
 
 float Object::ComputeSceneMedianDepth() {
-    cv::Mat Tcw_ = GetPose();
     vector<float> vDepths;
     vDepths.reserve(size());
-    cv::Mat Rwc = GetRotation().t();
-    float zcw = Tcw_.at<float>(2, 3);
-
+    float zcw = GetTranslation().at<float>(2);
+    cv::Mat R_row2 = GetRotation().row(2).t();
     // int cnt_mines_depth = 0;
     for (MapPointRef mp : GetMapPoints()) {
         // there still statistic the outlier's depth;
         cv::Mat x3Dw = mp->GetWorldPos();
-        float z = Rwc.dot(x3Dw) + zcw;
-        vDepths.push_back(z);
+        try {
+            float z = R_row2.dot(x3Dw) + zcw;
+            vDepths.push_back(z);
+        } catch (cv::Exception &e) {
+            cout << R_row2 << endl;
+            cout << x3Dw << endl;
+        }
     }
     sort(vDepths.begin(), vDepths.end());
     return vDepths[(vDepths.size()) / 2];
@@ -277,14 +281,14 @@ uint Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, f
         cv::Point2f pt = this->mpCam->project(this->GetRotation() * mp->GetWorldPos() + this->GetTranslation());
 
         std::vector<cv::Mat> _desps;
-
-        for (size_t idx : GetFeaturesInArea(pt.x, pt.y, r_threshold)) {
+        std::vector<size_t> _ori_idx = GetFeaturesInArea(pt.x, pt.y, r_threshold);
+        for (size_t idx : _ori_idx) {
             _desps.push_back(desps.row(idx));
         }
         if (_desps.size()) {
-            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio(0.8);
+            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio(0.6);
             if (res.size()) {
-                AddMapPoint(mp, res[0].trainIdx);
+                AddMapPoint(mp, _ori_idx[res[0].trainIdx]);
                 cnt += 1;
             }
         }

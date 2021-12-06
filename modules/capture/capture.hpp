@@ -5,7 +5,10 @@
 #include <string>
 namespace MCVSLAM {
 class CaptureConfig;
-
+enum Capture_ROS_MSG {
+    RESET,
+    GRAB,
+};
 class Capture {
    public:
     enum Work_Mode { WEBCAM = 0, VIDEO_FILE = 1, PATH = 2 };
@@ -47,6 +50,7 @@ class CaptureConfig {
     int fps;
     int capture_cnt;
     double percent;
+    bool frame_by_frame = false;
     std::vector<capture_info> caps;
 };
 

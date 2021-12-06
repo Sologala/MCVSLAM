@@ -56,12 +56,13 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
 }
 
 Frame::~Frame() {
+    // fmt::print("kf {} is freeing \n", this->id);
     for (auto obj : {this->LEFT, this->WIDE})
         for (auto mp : obj->GetMapPoints()) {
             mp->UnBindKeyFrame(this, obj);
         }
     Map::used_kf += 1;
-    fmt::print("kf {} is freed \n", this->id);
+    // fmt::print("kf {} is freed \n", this->id);
 }
 
 void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {

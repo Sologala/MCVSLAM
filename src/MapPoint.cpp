@@ -19,7 +19,7 @@ MapPoint::~MapPoint() {
 
 const cv::Mat MapPoint::GetWorldPos() {
     READLOCK _lock(mtx_pos);
-    return position_w;
+    return position_w.clone();
 }
 
 void MapPoint::SetWorldPose(const cv::Mat &pos) {

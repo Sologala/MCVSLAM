@@ -105,6 +105,7 @@ void CaptureConfig::Parse(const std::string &configPath) {
         capture_cnt = fs["Capture_cnt"].As<int>();
         fps = fs["Capture.fps"].As<int>();
         percent = fs["Capture.percent"].As<double>();
+        frame_by_frame = fs["Capture.frame_by_frame"].As<bool>();
         for (int i = 0; i < capture_cnt; i++) {
             std::string temp_source;
             std::string temp_key = "Capture" + to_string(i);
@@ -128,8 +129,8 @@ Capture::Capture(const int &_camId) {
 }
 
 Capture::~Capture() {
-    cap->release();
-    delete cap;
+    // cap->release();
+    // delete cap;
 }
 
 bool Capture::get(cv::Mat &img) {

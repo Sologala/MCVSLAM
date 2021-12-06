@@ -2,6 +2,8 @@
 #define MATCHER_H
 #include <opencv2/core/mat.hpp>
 #include <vector>
+
+#include "Object.hpp"
 #pragma once
 #include <opencv2/core/types.hpp>
 
@@ -37,6 +39,8 @@ class MatchRes : public std::vector<cv::DMatch> {
     MatchRes& Filter_GMS(const cv::Size sz1, const cv::Size sz2, const Keypoints& kps1, const Keypoints& kps2, uint threshold = 6.f);
     MatchRes& FilterOrientation(const Keypoints& kps1, const Keypoints& kps2);
     MatchRes& FilterFMatrix(const Keypoints& kps1, const Keypoints& kps2, const cv::Mat& F12, const std::vector<float>& LevelSigma2);
+
+    MatchRes& Show(const std::string& wnd_name, ObjectRef& obj1, ObjectRef& obj2);
 };
 
 class MatchResKnn : public std::vector<std::vector<cv::DMatch>> {

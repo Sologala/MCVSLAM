@@ -9,7 +9,12 @@
 
 #pragma once
 namespace MCVSLAM {
-enum Track_State { LOST = 1, NORMAL = 2 };
+enum Track_State {
+    OK = 0,
+    LOST = 1,
+    INIT_FAILD = 3,
+    TRACK_FAILD = 2,
+};
 class Tracker {
    public:
     Tracker(Map* _map, osg_viewer* _viewer);
@@ -25,6 +30,7 @@ class Tracker {
     void SetLastKeyFrame(KeyFrame kf);
     void SetLastFrame(FrameRef kf);
 
+    uint Init(KeyFrame& cur_frame);
     Map* map;
     osg_viewer* viewer;
     float baseline = 0.8;

@@ -9,6 +9,7 @@
 #include <opencv2/core/base.hpp>
 #include <opencv2/core/types.hpp>
 #include <opencv2/features2d.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/xfeatures2d.hpp>
 #include <queue>
 #include <stdexcept>
@@ -29,6 +30,7 @@ MatchRes& MatchRes::FilterThreshold(const int thres_hold) {
         }
     }
     (*this).resize(i);
+    // fmt::print(" << [Threshold] {}", this->size());
     return (*this);
 }
 
@@ -56,7 +58,7 @@ MatchRes& MatchRes::FilterOrientation(const Keypoints& kps1, const Keypoints& kp
         assert(bin_id >= 0 && bin_id < HISTO_LENGTH);
         rot_bins[bin_id].push_back(i);
     }
-    sort(&rot_bins[0], &rot_bins[0] + HISTO_LENGTH, [](const vector<uint>& a, const vector<uint>& b) { return a.size() < b.size(); });
+    sort(&rot_bins[0], &rot_bins[0] + HISTO_LENGTH, [](const vector<uint>& a, const vector<uint>& b) { return a.size() > b.size(); });
     // pick minnal 3 size()
     MatchRes ret;
     for (uint i = 0; i < 3; i++) {
@@ -66,6 +68,7 @@ MatchRes& MatchRes::FilterOrientation(const Keypoints& kps1, const Keypoints& kp
         }
     }
     *this = ret;
+    // fmt::print(" << [Orientation] {}", this->size());
     return (*this);
 }
 
@@ -82,7 +85,15 @@ MatchRes& MatchRes::FilterFMatrix(const Keypoints& kps1, const Keypoints& kps2, 
         }
     }
     (*this).resize(i);
+    // fmt::print(" << [FMatrix] {}", this->size());
     return (*this);
+}
+
+MatchRes& MatchRes::Show(const std::string& wnd_name, ObjectRef& obj1, ObjectRef& obj2) {
+    cv::Mat _show_img;
+    cv::drawMatches(obj1->img, obj1->kps, obj2->img, obj2->kps, *this, _show_img);
+    // cv::imshow(wnd_name, _show_img);
+    return *this;
 }
 
 MatchRes MatchResKnn::FilterRatio(const float ratio) {
@@ -94,6 +105,7 @@ MatchRes MatchResKnn::FilterRatio(const float ratio) {
             res.push_back(v_match[0]);
         }
     }
+    // fmt::print(" << [Ratio] {}", res.size());
     return res;
 }
 
@@ -132,7 +144,7 @@ MatchRes Matcher::BFMatch(const Desps& desp1, const Desps& desp2) {
 
 MatchResKnn Matcher::DBowMatch(const Desps& desp1, const DBoW3::FeatureVector& bow_feat1, const Desps& desp2, const DBoW3::FeatureVector& bow_feat2) {
     MatchResKnn res;
-    res.resize(desp1.rows, std::vector<cv::DMatch>(2));
+    // res.resize(desp1.rows, std::vector<cv::DMatch>(2));
     // We perform the matching over ORB that belong to the same vocabulary node
     // (at a certain level)
     DBoW3::FeatureVector::const_iterator f1_it = bow_feat1.begin();

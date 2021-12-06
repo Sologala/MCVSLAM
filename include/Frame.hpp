@@ -43,6 +43,8 @@ class Frame {
     static cv::Mat Trl;
     static cv::Mat Twl;
     static float b, bf, b_2;
+
+    bool is_marked_no_free = false;
 };
 
 }  // namespace MCVSLAM

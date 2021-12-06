@@ -4,6 +4,7 @@
 #include <exception>
 #include <memory>
 #include <opencv2/core/types.hpp>
+#include <opencv2/highgui.hpp>
 #include <unordered_set>
 
 #include "BAoptimizer.hpp"
@@ -48,7 +49,7 @@ void Map::AddKeyFrame(FrameRef frame) {
     all_keyframes.insert(frame);
 
     //  create index from mappoints to this frame ;
-    for (auto obj : {frame->LEFT, frame->WIDE, frame->RIGHT})
+    for (auto obj : {frame->LEFT, frame->WIDE})
         for (auto mpr : obj->GetMapPoints()) {
             mpr->BindKeyFrame(frame, obj);
             AddMapPoint(mpr);
@@ -72,7 +73,7 @@ void Map::AddKeyFrame(FrameRef frame) {
     for (uint i = 0, sz = recent_created_mps.size(); i < sz; i++) {
         MapPointRef mp = recent_created_mps.front();
         recent_created_mps.pop_front();
-        if (mp->isBad() || frame->id - mp->kf_id >= 3 || mp->GetAllObservation().size() == 0) {
+        if (mp->isBad() || (frame->id - mp->kf_id >= 3 && mp->GetAllObservation().size() == 0)) {
             DelMapPoint(mp);
             continue;
         } else {
@@ -91,8 +92,8 @@ void Map::AddKeyFrame(FrameRef frame) {
         local_kfs = GrabLocalMap_Mappoint(frame, 3);
         std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
         local_kfs.insert(frame);
-        fmt::print("local_kfs {}, fix_kfs {}\n", local_kfs.size(), fix_local_kfs.size());
         uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 10, &PoseEstimation::FilterCallBack_Chi2);
+        fmt::print("[local ba] res {}  kfs {}, fix_kfs {}\n", op_cnt, local_kfs.size(), fix_local_kfs.size());
         for (const KeyFrame& kf : local_kfs) {
             Map::UpdateConnections(kf);
         }
@@ -129,7 +130,9 @@ void Map::DelKeyFrame(FrameRef frame) {
 void Map::AddMapPoint(MapPointRef mp) { all_mappoints.insert(mp); }
 
 void Map::DelMapPoint(MapPointRef mp) {
-    assert(all_mappoints.count(mp) != 0);
+    if (all_mappoints.count(mp) == 0) {
+        return;
+    }
     all_mappoints.erase(mp);
     for (auto ob : mp->GetAllObservation()) {
         KeyFrame kf = ob.first;
@@ -183,7 +186,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
     // median depth in obj2, why use obj2 not obj1 ?
     const float median_depth = obj2->ComputeSceneMedianDepth();
-    if (baseline / median_depth < 0.01 || baseline / median_depth > 10) {
+    if (baseline < min_baseline || baseline / median_depth > 10) {
         fmt::print("Mapping::Trianglize:: traslation too less or large than baseline [{} < {}]\n", baseline, min_baseline);
         return 0;
     }
@@ -194,9 +197,10 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
     auto match_res = Matcher::DBowMatch(obj1->desps, obj1->bow_feature, obj2->desps, obj2->bow_feature)
                          .FilterRatio(0.6)
                          .FilterThreshold(64)
-                         .FilterOrientation(obj1->kps, obj2->kps)
-                         .FilterFMatrix(obj1->kps, obj2->kps, F12, obj2->extractor->mvLevelSigma2);
-
+                         .FilterOrientation(obj1->kps, obj2->kps);
+    //  .FilterFMatrix(obj1->kps, obj2->kps, F12, obj2->extractor->mvLevelSigma2);
+    match_res.Show(fmt::format("trangle  bow match", match_res.size()), obj1, obj2);
+    cv::waitKey(30);
     if (match_res.size() < 10) {
         return 0;
     }
@@ -223,7 +227,8 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
         const cv::KeyPoint& kp1 = obj1->kps[m.queryIdx];
         const cv::KeyPoint& kp2 = obj2->kps[m.trainIdx];
 
-        float kp1_ur = -1, kp2_ur = -1;
+        float kp1_ur = obj1->name == CAM_NAME::L ? uright_obj1[m.queryIdx] : -1;
+        float kp2_ur = obj2->name == CAM_NAME::L ? uright_obj2[m.trainIdx] : -1;
 
         // Dawson Wen:
         // subpixel Match
@@ -241,10 +246,17 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
         float cosParallaxStereo1 = cosParallaxStereo;
         float cosParallaxStereo2 = cosParallaxStereo;
 
+        bool bStereo1 = kp1_ur != -1 && obj1->name == CAM_NAME::L;
+        bool bStereo2 = kp2_ur != -1 && obj2->name == CAM_NAME::L;
+
+        if (bStereo1)
+            cosParallaxStereo1 = cos(2 * atan2(min_baseline / 2, kf1->depth_left[m.queryIdx]));
+        else if (bStereo2)
+            cosParallaxStereo2 = cos(2 * atan2(min_baseline / 2, kf2->depth_left[m.trainIdx]));
         cosParallaxStereo = min(cosParallaxStereo1, cosParallaxStereo2);
 
         cv::Mat x3D;
-        if (cosParallaxRays > 0 && ((cosParallaxRays < 0.9998))) {
+        if (cosParallaxRays < cosParallaxStereo && cosParallaxRays > 0 && (bStereo1 || bStereo2 || (cosParallaxRays < 0.9998))) {
             // Linear Triangulation Method
             cv::Mat A(4, 4, CV_32F);
             A.row(0) = xn1.at<float>(0) * Tcw1.row(2) - Tcw1.row(0);
@@ -261,15 +273,13 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
             // Euclidean coordinates
             x3D = x3D.rowRange(0, 3) / x3D.at<float>(3);
+        } else if (bStereo1 && cosParallaxStereo1 < cosParallaxStereo2) {
+            x3D = obj1->mpCam->unproject_z(kp1.pt, kf1->depth_left[m.queryIdx]);
+        } else if (bStereo2 && cosParallaxStereo2 < cosParallaxStereo1) {
+            x3D = obj2->mpCam->unproject_z(kp2.pt, kf2->depth_left[m.trainIdx]);
+        } else {
+            continue;  // wide match and low parallax
         }
-
-        //  else if (bStereo1 && cosParallaxStereo1 < cosParallaxStereo2) {
-        //     x3D = obj1->UnprojectStereo(idx1);
-        // } else if (bStereo2 && cosParallaxStereo2 < cosParallaxStereo1) {
-        //     x3D = obj2->UnprojectStereo(idx2);
-        // } else {
-        //     continue;  // wide match and low parallax
-        // }
 
         if (x3D.empty()) continue;
         cv::Mat x3Dt = x3D.t();
@@ -282,28 +292,47 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
         if (z2 <= 0) continue;
 
         // Check reprojection error in first keyframe
-
+        // Check reprojection error in first keyframe
         const float& sigmaSquare1 = obj1->extractor->mvLevelSigma2[kp1.octave];
         const float x1 = Rcw1.row(0).dot(x3Dt) + tcw1.at<float>(0);
         const float y1 = Rcw1.row(1).dot(x3Dt) + tcw1.at<float>(1);
         const float invz1 = 1.0 / z1;
 
-        cv::Point2f uv1 = pCamera1->project(cv::Point3f(x1, y1, z1));
-        float errX1 = uv1.x - kp1.pt.x;
-        float errY1 = uv1.y - kp1.pt.y;
+        if (!bStereo1) {
+            cv::Point2f uv1 = pCamera1->project(cv::Point3f(x1, y1, z1));
+            float errX1 = uv1.x - kp1.pt.x;
+            float errY1 = uv1.y - kp1.pt.y;
 
-        if ((errX1 * errX1 + errY1 * errY1) > 5.991 * sigmaSquare1) continue;
+            if ((errX1 * errX1 + errY1 * errY1) > 5.991 * sigmaSquare1) continue;
+        } else {
+            float u1 = fx1 * x1 * invz1 + cx1;
+            float u1_r = u1 - min_baseline * invz1;
+            float v1 = fy1 * y1 * invz1 + cy1;
+            float errX1 = u1 - kp1.pt.x;
+            float errY1 = v1 - kp1.pt.y;
+            float errX1_r = u1_r - kp1_ur;
+            if ((errX1 * errX1 + errY1 * errY1 + errX1_r * errX1_r) > 7.8 * sigmaSquare1) continue;
+        }
 
         // Check reprojection error in second keyframe
         const float sigmaSquare2 = obj2->extractor->mvLevelSigma2[kp2.octave];
         const float x2 = Rcw2.row(0).dot(x3Dt) + tcw2.at<float>(0);
         const float y2 = Rcw2.row(1).dot(x3Dt) + tcw2.at<float>(1);
         const float invz2 = 1.0 / z2;
-
-        cv::Point2f uv2 = pCamera2->project(cv::Point3f(x2, y2, z2));
-        float errX2 = uv2.x - kp2.pt.x;
-        float errY2 = uv2.y - kp2.pt.y;
-        if ((errX2 * errX2 + errY2 * errY2) > 5.991 * sigmaSquare2) continue;
+        if (!bStereo2) {
+            cv::Point2f uv2 = pCamera2->project(cv::Point3f(x2, y2, z2));
+            float errX2 = uv2.x - kp2.pt.x;
+            float errY2 = uv2.y - kp2.pt.y;
+            if ((errX2 * errX2 + errY2 * errY2) > 5.991 * sigmaSquare2) continue;
+        } else {
+            float u2 = fx2 * x2 * invz2 + cx2;
+            float u2_r = u2 - min_baseline * invz2;
+            float v2 = fy2 * y2 * invz2 + cy2;
+            float errX2 = u2 - kp2.pt.x;
+            float errY2 = v2 - kp2.pt.y;
+            float errX2_r = u2_r - kp2_ur;
+            if ((errX2 * errX2 + errY2 * errY2 + errX2_r * errX2_r) > 7.8 * sigmaSquare2) continue;
+        }
 
         // Check scale consistency
         float dist1 = cv::norm(x3D - Ow1);
@@ -322,7 +351,6 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
         // Triangulation is succesfull
 
         MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), kf2->id);
-        cnt++;
         obj1->AddMapPoint(new_mp, m.queryIdx);
         obj2->AddMapPoint(new_mp, m.trainIdx);
 
@@ -335,7 +363,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
         cnt++;
     }
 
-    return 0;
+    return cnt;
 }
 
 cv::Mat Map::ComputeF12(ObjectRef& rig1, ObjectRef& rig2) {
@@ -353,6 +381,14 @@ cv::Mat Map::ComputeF12(ObjectRef& rig1, ObjectRef& rig2) {
     const cv::Mat& K2 = rig2->mpCam->toK();
 
     return K1.t().inv() * t12x * R12 * K2.inv();
+}
+
+std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
+    std::vector<cv::Mat> ret;
+    for (const KeyFrame& kf : all_keyframes) {
+        ret.push_back(kf->LEFT->GetPoseInverse());
+    }
+    return ret;
 }
 
 std::vector<cv::Mat> Map::GetAllMappointsForShow() {
