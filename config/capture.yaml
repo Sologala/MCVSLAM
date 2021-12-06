@@ -1,7 +1,8 @@
 Capture_cnt: 3
-Capture.fps: 5
+Capture.fps: 2
 Capture.topic: "multi/image"
-Capture.percent: 0.0001
+Capture.percent: 0.1
+Capture.frame_by_frame: true
 # Capture.percent: 1
 Capture0.VideoPath: "/home/wen/SLAM/Datasets/data/left/*.png"
 Capture0.topic: "left/image"
