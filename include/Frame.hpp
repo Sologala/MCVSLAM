@@ -26,6 +26,9 @@ class Frame {
     // int extractORB(ORB& obj,)
     cv::Mat SetPose(cv::Mat Tcw);
     cv::Mat GetPose();
+    cv::Mat GetPoseInverse() const { return LEFT->GetPoseInverse(); }
+    cv::Mat GetRotation() const { return LEFT->GetRotation(); }
+    cv::Mat GetTranslation() const { return LEFT->GetTranslation(); }
 
     void ComputeBow();
 

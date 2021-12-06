@@ -65,6 +65,9 @@ class Map {
 
     std::unordered_set<KeyFrame> GrabAnchorKeyFrames(std::unordered_set<KeyFrame> &kfs);
 
+    // Tracjtory
+    void AddFramePose(cv::Mat Tcw, KeyFrame rkf);
+
    public:
     std::unordered_set<MapPointRef> all_mappoints;
     std::unordered_set<KeyFrame> all_keyframes;
@@ -85,6 +88,9 @@ class Map {
 
     // recent_created_mappoints , need to check if those mappoing is ok.
     std::deque<MapPointRef> recent_created_mps;
+
+    // Tracjtory    [tracking ]
+    std::vector<std::pair<cv::Mat, KeyFrame>> trajectories;
 };
 
 }  // namespace MCVSLAM

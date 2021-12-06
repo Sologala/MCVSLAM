@@ -32,6 +32,10 @@ Track_State Tracker::Track(FrameRef cur_frame) {
             map->AddKeyFrame(cur_frame);
             SetLastKeyFrame(cur_frame);
             SetLastFrame(cur_frame);
+            {
+                cv::Mat T_cur_rfk = cur_frame->GetPoseInverse() * GetLastKeyFrame()->GetPose();
+                map->AddFramePose(T_cur_rfk, GetLastKeyFrame());
+            }
             return Track_State::OK;
         } else {
             // init faild
@@ -44,19 +48,19 @@ Track_State Tracker::Track(FrameRef cur_frame) {
     } else {
         {
             // system has been initialized!
-            if (velocity.empty() || (GetLastKeyFrame() && GetLastKeyFrame()->id + 2 >= cur_frame->id)) {
+            if (velocity.empty() || (GetLastKeyFrame() && GetLastKeyFrame()->id + 5 >= cur_frame->id)) {
                 // track by bow with LastKeyFrame
                 uint cnt_l = Bow_Track(GetLastKeyFrame()->LEFT, cur_frame->LEFT);
                 uint cnt_w = Bow_Track(GetLastKeyFrame()->WIDE, cur_frame->WIDE);
                 cur_frame->SetPose(GetLastFrame()->GetPose());
                 int opcnt = PoseEstimation::PoseOptimization(cur_frame);
                 fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
-                if (opcnt < 20) {
+                if (opcnt < 50) {
                     fmt::print("Track LastKeyFrame Faild! \n");
                     // exit(0);
                     state = Track_State::LOST;
                 }
-            } else if (!velocity.empty()) {
+            } else if (0 && !velocity.empty()) {
                 // track by MotionModel
                 cur_frame->SetPose(GetLastFrame()->GetPose() * velocity);
                 uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(GetLastKeyFrame()->LEFT->GetMapPoints());
@@ -70,6 +74,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                         // track by bow with LastKeyFrame
                         uint cnt_l = Bow_Track(GetLastKeyFrame()->LEFT, cur_frame->LEFT);
                         uint cnt_w = Bow_Track(GetLastKeyFrame()->WIDE, cur_frame->WIDE);
+                        cur_frame->SetPose(GetLastFrame()->GetPose());
                         int opcnt = PoseEstimation::PoseOptimization(cur_frame);
                         fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
                         if (opcnt < 20) {
@@ -81,18 +86,23 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                 }
             }
 
-            if (state == Track_State::OK) {
+            // if (state == Track_State::OK)
+            {
                 // track local map
                 auto local_kfs = map->GrabLocalMap_Mappoint(cur_frame, 3);
                 auto local_mps = map->GrabLocalMappoint(local_kfs, CAM_NAME::L);
-                uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(local_mps, 40);
+                auto local_mps_wide = map->GrabLocalMappoint(local_kfs, CAM_NAME::W);
+                uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(local_mps, 5);
+                uint pcnt_w = cur_frame->WIDE->ProjectBunchMapPoints(local_mps_wide, 5);
                 int opcnt = PoseEstimation::PoseOptimization(cur_frame);
-                fmt::print("[track local map]{}  {} kfs, {} mps,  project left {}\n", opcnt, local_kfs.size(), local_mps.size(), pcnt);
-                if (opcnt < 20) {
+                fmt::print("[track local map]{}  {} kfs, {} mps,  project left {} wide {}\n", opcnt, local_kfs.size(), local_mps.size(), pcnt,
+                           pcnt_w);
+                if (opcnt < 50) {
                     fmt::print("Track local map Faild! \n");
-                    uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(local_mps, 50);
                     // exit(0);
                     state = Track_State::LOST;
+                } else {
+                    state = Track_State::OK;
                 }
             }
         }
@@ -102,7 +112,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
         // delete cur_frame;
         this->Clear();
         map->Clear();
-        fmt::print("Track LOST Please Press any key to exit\n");
+        fmt::print("Track LOST with {} frame Please Press any key to exit\n", cur_frame->id);
         char _ = getchar();
         viewer->RequestStop();
         exit(0);
@@ -118,7 +128,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
     }
 
     // Check if need new keyframe
-    if ((cur_frame->id - GetLastKeyFrame()->id > 5)) {
+    if ((cur_frame->id - GetLastKeyFrame()->id > 4)) {
         map->AddKeyFrame(cur_frame);
         SetLastKeyFrame(cur_frame);
     }
@@ -127,6 +137,11 @@ Track_State Tracker::Track(FrameRef cur_frame) {
     // fmt::print(" {} {} kfs in map  {} {} mps in map \n", Map::cnt_kf - Map::used_kf, map->KeyFrameSize(), Map::cnt_mp - Map::used_mp,
     //            map->MapPointSize());
 
+    // Commit this frame to the Trajectory
+    {
+        cv::Mat T_cur_rfk = cur_frame->GetPoseInverse() * GetLastKeyFrame()->GetPose();
+        map->AddFramePose(T_cur_rfk, GetLastKeyFrame());
+    }
     fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
     for (auto p : MyTimer::Timer::COUNT) {
         fmt::print("{:^20}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(), p.second.fps());
