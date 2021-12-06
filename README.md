@@ -23,9 +23,8 @@
 - [ ] LoopClosing with Dbow 
 - [ ] Visualization of Essengraph
 - [ ] Quantifiation of Reprojection Error with Scene Model,  Calculated by 
-    $$
-        e = ||z_{messured} - z_{buffer_from osg} ||_2^2
-    $$
+
+    $$ e = ||z_{messured} - z_{buffer_from osg} ||_2^2$$
 
 
 ![](./.readme/align_result.png)
