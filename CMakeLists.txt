@@ -15,6 +15,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/app)
 find_package(pyp REQUIRED)
 link_libraries(pyp::fmt pyp::timer pyp::yaml pyp::cmdline)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   -O3 ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}   -O3 ")
+
+
+
 add_subdirectory(modules)
 file(GLOB src_file "./src/*.c*")
 
