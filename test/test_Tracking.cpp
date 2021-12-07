@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
         }
         pubs.emplace_back(it.advertise(Capture::global_capture_config.caps[i].topic, 1));
     }
-    while (1) {
+    while (ros::ok()) {
         ros::Time time_stamp = ros::Time::now();
         std::vector<cv::Mat> imgs(3);
         for (int i = 0; i < Capture::global_capture_config.capture_cnt; i++) {
