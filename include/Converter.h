@@ -57,6 +57,8 @@ class Converter {
     static std::vector<float> toEuler(const cv::Mat &R);
 
     static cv::Mat toSkewSymmetricMatrix(const cv::Mat &v);
+
+    static cv::Mat SE3Inverse(const cv::Mat T);
 };
 
 }  // namespace MCVSLAM

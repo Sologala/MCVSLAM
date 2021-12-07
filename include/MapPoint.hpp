@@ -3,6 +3,8 @@
 #include <boost/thread/pthread/mutex.hpp>
 #include <boost/thread/pthread/shared_mutex.hpp>
 #include <memory>
+
+#include "Pinhole.hpp"
 #pragma once
 #include <boost/thread.hpp>
 #include <opencv2/core/mat.hpp>
@@ -19,7 +21,7 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     friend class Map;
 
    public:
-    MapPoint(double x, double y, double z, cv::Mat _desp, uint _kf_id, uint id);
+    MapPoint(double x, double y, double z, cv::Mat _desp, uint _kf_id, uint _id, CAM_NAME _created_from, uint _life_span);
 
     ~MapPoint();
 
@@ -52,9 +54,13 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
 
     boost::shared_mutex mtx_feature;
 
+    const CAM_NAME create_from;
     bool is_bad = false;
     cv::Mat norm_vec;
     Observation relative_kfs;
+
+    // Mappoint LiftSpan
+    uint lifespan;
 };
 
 }  // namespace MCVSLAM

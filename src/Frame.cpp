@@ -35,7 +35,7 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     : id(_id), time_stamp(time_stamp) {
     LEFT = std::make_shared<Object>(cam_left, imgleft, &extractor_left, CAM_NAME::L);
     RIGHT = std::make_shared<Object>(cam_left, imgright, &extractor_right, CAM_NAME::R);
-    WIDE = std::make_shared<Object>(cam_left, imgwide, &extractor_wide, CAM_NAME::W);
+    WIDE = std::make_shared<Object>(cam_wide, imgwide, &extractor_wide, CAM_NAME::W);
 
     {
         MyTimer::Timer _("ORB_EXTRACT");

@@ -118,8 +118,9 @@ Track_State Tracker::Track(FrameRef cur_frame) {
         exit(0);
     }
 
-    viewer->Draw(map->GetAllMappointsForShow(), 225, 0, 0);
-    viewer->DrawCams(map->GetAllKeyFrameForShow(), 225, 0, 0);
+    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
+    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
+    viewer->DrawCams(map->GetAllKeyFrameForShow(), 0, 0, 225);
     viewer->Commit();
 
     // Calculate velocity
@@ -139,7 +140,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
 
     // Commit this frame to the Trajectory
     {
-        cv::Mat T_cur_rfk = cur_frame->GetPoseInverse() * GetLastKeyFrame()->GetPose();
+        cv::Mat T_cur_rfk = cur_frame->GetPose() * GetLastKeyFrame()->GetPoseInverse();
         map->AddFramePose(T_cur_rfk, GetLastKeyFrame());
     }
     fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
@@ -216,7 +217,7 @@ uint Tracker::Init(KeyFrame& cur_frame) {
         if (depth != -1) {
             cv::Mat mp = cur_frame->LEFT->mpCam->unproject_z(kp.pt, depth);
             // cout << mp << endl;
-            auto mpr = map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->id);
+            auto mpr = map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->id, CAM_NAME::L);
             cur_frame->LEFT->AddMapPoint(mpr, i);
             cnt += 1;
         }

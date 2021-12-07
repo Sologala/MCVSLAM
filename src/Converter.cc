@@ -183,4 +183,15 @@ cv::Mat Converter::toSkewSymmetricMatrix(const cv::Mat &v) {
     return (cv::Mat_<float>(3, 3) << 0, -v.at<float>(2), v.at<float>(1), v.at<float>(2), 0, -v.at<float>(0), -v.at<float>(1), v.at<float>(0), 0);
 }
 
+cv::Mat Converter::SE3Inverse(const cv::Mat T) {
+    cv::Mat R = T.rowRange(0, 3).colRange(0, 3);
+    cv::Mat t = T.rowRange(0, 3).col(3);
+    cv::Mat T_inv = cv::Mat::eye(4, 4, T.type());
+    cv::Mat R_inv = R.t();
+    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
+    cv::Mat new_t = -R_inv * t;
+    new_t.copyTo(T_inv.rowRange(0, 3).col(3));
+    return new_t;
+}
+
 }  // namespace MCVSLAM

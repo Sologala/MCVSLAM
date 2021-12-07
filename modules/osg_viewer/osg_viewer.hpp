@@ -27,7 +27,7 @@ class osg_viewer {
     void Run();
     void Draw(const cv::Mat mps, uint r, uint g, uint b);
     void Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b);
-    void DrawCam(const cv::Mat Twc, uint r, uint g, uint b);
+    void DrawCam(const cv::Mat Tcw, uint r, uint g, uint b);
     void SetCurViewFollow(const cv::Mat Twc);
     void Commit();
     osg::Matrixd ShowTracjtory(const std::string& tracj_file, osg::Vec4 color);
@@ -36,7 +36,7 @@ class osg_viewer {
     bool IsStoped();
     void RequestStop();
 
-    void DrawCams(const std::vector<cv::Mat>& Twcs, uint r, uint g, uint b);
+    void DrawCams(const std::vector<cv::Mat>& Tcws, uint r, uint g, uint b);
 
    private:
     void Parse(std::string config_file);
@@ -50,6 +50,9 @@ class osg_viewer {
     bool is_show_model = false;
 
     cv::Rect wnd_rect;
+
+    osg::Matrixd tf;
+    osg::Matrixd follow_tf;
 
     osg::ref_ptr<osg::Group> node_environment;
     osg::ref_ptr<osg::Node> node_curr_cam;

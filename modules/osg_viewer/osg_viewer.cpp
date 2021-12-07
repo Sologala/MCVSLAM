@@ -1,5 +1,6 @@
 #include "osg_viewer.hpp"
 
+#include <opencv2/core/hal/interface.h>
 #include <pyp/fmt/core.h>
 
 #include <algorithm>
@@ -32,6 +33,7 @@
 #include <osg/ShapeDrawable>
 #include <osg/Transform>
 #include <osg/Vec3>
+#include <osg/Vec3d>
 #include <osg/Vec4>
 #include <osg/ref_ptr>
 #include <osgDB/ReadFile>
@@ -80,11 +82,12 @@ void osg_viewer::Draw(const cv::Mat mps, uint r, uint g, uint b) {
     pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
     osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
     osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
-    osg::ref_ptr<osg::Vec3Array> colors = new osg::Vec3Array();
+    osg::ref_ptr<osg::Vec4dArray> colors = new osg::Vec4dArray();
+
     for (int i = 0, sz = mps.rows; i < sz; i++) {
         const cv::Point3f *ptr = mps.ptr<cv::Point3f>(i);
         v->push_back(osg::Vec3(ptr->x, -ptr->y, -ptr->z));
-        colors->push_back(osg::Vec3(r, g, b));
+        colors->push_back(osg::Vec4(1., r, g, b));
     }
     geom->setVertexArray(v);
     geom->setColorArray(colors);
@@ -106,13 +109,13 @@ void osg_viewer::Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b) {
     pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
     osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
     osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
-    osg::ref_ptr<osg::Vec3Array> colors = new osg::Vec3Array();
+    osg::ref_ptr<osg::Vec4dArray> colors = new osg::Vec4dArray();
 
     for (int i = 0, sz = mps.size(); i < sz; i++) {
         auto ptr = mps[i].ptr<float>(0);
         v->push_back(osg::Vec3(*ptr, -*(ptr + 1), -*(ptr + 2)));
         // fmt::print("{} {} {}\n", *ptr, *(ptr + 1), *(ptr + 2));
-        colors->push_back(osg::Vec3(r, g, b));
+        colors->push_back(osg::Vec4(1., r, g, b));
     }
     geom->setVertexArray(v);
     geom->setColorArray(colors);
@@ -196,15 +199,31 @@ void osg_viewer::RequestStop() {
     is_request_stop = true;
 }
 
-void osg_viewer::DrawCams(const std::vector<cv::Mat> &Twcs, uint r, uint g, uint b) {
-    fmt::print("draw {} keyframes \n", Twcs.size());
-    for (cv::Mat Twc : Twcs) {
-        DrawCam(Twc, r, g, b);
+void osg_viewer::DrawCams(const std::vector<cv::Mat> &Tcws, uint r, uint g, uint b) {
+    fmt::print("draw {} keyframes \n", Tcws.size());
+    for (cv::Mat Tcw : Tcws) {
+        DrawCam(Tcw, r, g, b);
     }
-    if (Twcs.size()) SetCurViewFollow(Twcs.back());
+    if (Tcws.size()) SetCurViewFollow(Tcws.back());
 }
 
-void osg_viewer::DrawCam(cv::Mat Twc, uint r, uint g, uint b) {
+cv::Mat SE3Inverse(const cv::Mat T) {
+    cv::Mat R = T.rowRange(0, 3).colRange(0, 3);
+    cv::Mat t = T.rowRange(0, 3).col(3);
+    cv::Mat T_inv = cv::Mat::eye(4, 4, T.type());
+    cv::Mat R_inv = R.t();
+    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
+    cv::Mat new_t = -R_inv * t;
+    new_t.copyTo(T_inv.rowRange(0, 3).col(3));
+    return new_t;
+}
+
+/* */
+cv::Mat right2left(cv::Mat T) {
+    static cv::Mat r2l = (cv::Mat_<float>(4, 4) << -1, 0, 0, 0, /* */ 0, 01, 0, 0, /* */ 0, 0, 1, 0, /* */ 0, 0, 0, 1);
+    return r2l * T;
+}
+void osg_viewer::DrawCam(cv::Mat Tcw, uint r, uint g, uint b) {
     osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
     osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
     pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
@@ -244,7 +263,7 @@ void osg_viewer::DrawCam(cv::Mat Twc, uint r, uint g, uint b) {
     //为每个顶点指定一种颜色
     osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
     for (int i = 0, sz = v->size(); i < sz; ++i) {
-        c->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));  //坐标原点为红色
+        c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
     }
     //如果没指定颜色则会变为黑色
     geom->setColorArray(c.get());
@@ -260,27 +279,26 @@ void osg_viewer::DrawCam(cv::Mat Twc, uint r, uint g, uint b) {
     geode->addDrawable(geom.get());
 
     osg::ref_ptr<osg::MatrixTransform> trans = new osg::MatrixTransform();
-    cv::Mat t = Twc.rowRange(0, 3).col(3);
-    osg::Matrixd t_ = osg::Matrixd::translate(t.at<float>(0), -t.at<float>(1), -t.at<float>(2));
-    cv::Mat R = Twc.rowRange(0, 3).col(3);
-    cv::Mat Twc_t;
-    cv::transpose(Twc, Twc_t);
-    osg::Matrixd mat(Twc_t.ptr<float>());
-    osg::Matrixd cam_pose = osg::Matrixd(mat.getRotate()) * t_;
+
     trans->addChild(geode);
-    trans->setMatrix(cam_pose);
+    cv::Mat Tcw_lhs = right2left(Tcw);
+    cv::Mat Tcw_t;
+    cv::transpose(Tcw_lhs, Tcw_t);
+    osg::Matrixd mat(Tcw_t.ptr<float>());
+    trans->setMatrix(mat);
     draw_buffer[draw_idx]->addChild(trans);
 }
 
-void osg_viewer::SetCurViewFollow(const cv::Mat Twc) {
-    cv::Mat t = Twc.rowRange(0, 3).col(3);
-    osg::Matrixd t_ = osg::Matrixd::translate(-t.at<float>(0), t.at<float>(1), -t.at<float>(2) - 400);
-    cv::Mat R = Twc.rowRange(0, 3).col(3);
-    cv::Mat Twc_t;
-    cv::transpose(Twc, Twc_t);
-    osg::Matrixd mat(Twc_t.ptr<float>());
-    osg::Matrixd cam_pose = osg::Matrixd(mat.getRotate()) * t_;
-    viewer->getCameraManipulator()->setByInverseMatrix(cam_pose);
+void osg_viewer::SetCurViewFollow(const cv::Mat Tcw) {
+    cv::Mat Tcw_lhs = right2left(Tcw);
+    cv::Mat t = Tcw_lhs.rowRange(0, 3).col(3);
+    cv::Mat Tcw_t;
+    cv::transpose(Tcw, Tcw_t);
+    // osg::Matrixd mat(Tcw_t.ptr<float>());
+    osg::Matrixd mat;
+    mat.makeTranslate(osg::Vec3d(t.at<float>(0), t.at<float>(1), t.at<float>(2)));
+
+    viewer->getCameraManipulator()->setByMatrix(tf * follow_tf * mat);
 }
 
 osg::ref_ptr<osg::Node> osg_viewer::CreateCoordinate() {
@@ -361,6 +379,9 @@ void osg_viewer::Parse(std::string config_file) {
     is_show_model = fs["is_show_model"].As<bool>();
     wnd_rect = cv::Rect(fs["window_x"].As<int>(), fs["window_y"].As<int>(), fs["window_width"].As<int>(), fs["window_height"].As<int>());
     gt_tracj_path = fs["gt_traj"].As<std::string>();
+
+    vector<float> follow_tf_vec = fs["follow_tf"].AsVector<float>();
+    follow_tf.makeTranslate(follow_tf_vec[0], follow_tf_vec[1], follow_tf_vec[2]);
 }
 osg_viewer::osg_viewer(const std::string &config_file) {
     draw_buffer[0] = new osg::Group();
@@ -395,7 +416,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     }
 
     // load ground truth traj
-    osg::Matrixd tf = ShowTracjtory(gt_tracj_path, osg::Vec4(0, 100, 225, 100));
+    tf = ShowTracjtory(gt_tracj_path, osg::Vec4(0, 100, 225, 100));
     // tf = osg::Matrixd::inverse(tf);
     scene->addChild(ground_trugh_traj);
     osg::Matrixd tft;

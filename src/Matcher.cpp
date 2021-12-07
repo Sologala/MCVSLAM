@@ -78,7 +78,7 @@ MatchRes& MatchRes::FilterFMatrix(const Keypoints& kps1, const Keypoints& kps2, 
         cv::DMatch m = (*this)[i];
         cv::KeyPoint kp1 = kps1[m.queryIdx];
         cv::KeyPoint kp2 = kps2[m.trainIdx];
-        if (CheckDistEpipolarLine(kp1, kp2, F12, LevelSigma2)) {
+        if (false == CheckDistEpipolarLine(kp1, kp2, F12, LevelSigma2)) {
             (*this)[i] = (*this)[j--];
         } else {
             i++;

@@ -7,3 +7,4 @@ window_y: 0
 window_width: 1200
 window_height: 1600
 gt_traj: /home/wen/SLAM/MCVSLAM/data/trajectory_ori.txt
+follow_tf: 0 0 200

@@ -6,7 +6,8 @@
 #include "Object.hpp"
 using namespace std;
 namespace MCVSLAM {
-MapPoint::MapPoint(double x, double y, double z, cv::Mat _desp, uint _kf_id, uint _id) : id(_id), kf_id(_kf_id) {
+MapPoint::MapPoint(double x, double y, double z, cv::Mat _desp, uint _kf_id, uint _id, CAM_NAME _created_from, uint _life_span)
+    : id(_id), kf_id(_kf_id), create_from(_created_from), lifespan(_life_span) {
     position_w = (cv::Mat_<float>(3, 1) << x, y, z);
     desp = _desp;
 }

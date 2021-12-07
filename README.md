@@ -5,7 +5,7 @@
 # Feature
 - Multi camera hierarchical optimization based on multi resolution cameras observation.
 - A multi thread Framework similar to ORB_SLAM but more simple and readable.
-- Unified Matching and Optimizing process to reduce code redundancy
+- Unified Matching process code  as well as  Optimizing  to reduce redundancy
 
 
 # Dependency 

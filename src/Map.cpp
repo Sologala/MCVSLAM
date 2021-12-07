@@ -22,18 +22,20 @@ Map::Map(std::string config_file) {
     Yaml::Node root;
     Yaml::Parse(root, config_file);
     connection_threshold = root["connection_threshold"].As<int>();
+    mappoint_life_span = root["mappoint_life_span"].As<int>();
 }
 
-MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint kf_id) {
+MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint kf_id, CAM_NAME cam_name) {
     // MapPoint* mp = new MapPoint(x, y, z, _desp, mp_id++);
     // MapPointRef ret = std::shared_ptr<MapPoint>(mp);
     cnt_mp += 1;
-    return make_shared<MapPoint>(x, y, z, _desp, kf_id, mp_id++);
+    return make_shared<MapPoint>(x, y, z, _desp, kf_id, mp_id++, cam_name, mappoint_life_span);
 }
 
-MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint kf_id) {
+MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint kf_id, CAM_NAME cam_name) {
     assert(!xyz.empty() && xyz.rows == 3);
-    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, kf_id);
+
+    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, kf_id, cam_name);
     recent_created_mps.push_back(ref);
     return ref;
 }
@@ -47,12 +49,10 @@ FrameRef Map::CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, do
 void Map::AddKeyFrame(FrameRef frame) {
     // recored as keyframe
     all_keyframes.insert(frame);
-
     //  create index from mappoints to this frame ;
     for (auto obj : {frame->LEFT, frame->WIDE})
         for (auto mpr : obj->GetMapPoints()) {
             mpr->BindKeyFrame(frame, obj);
-            AddMapPoint(mpr);
         }
 
     UpdateConnections(frame);
@@ -73,11 +73,30 @@ void Map::AddKeyFrame(FrameRef frame) {
     for (uint i = 0, sz = recent_created_mps.size(); i < sz; i++) {
         MapPointRef mp = recent_created_mps.front();
         recent_created_mps.pop_front();
-        if (mp->isBad() || (frame->id - mp->kf_id >= 3 && mp->GetAllObservation().size() == 0)) {
-            DelMapPoint(mp);
-            continue;
+        uint ob_cnt = mp->GetAllObservation().size();
+
+        enum Action { DEL, STAY, SAVE };
+        Action act;
+        if (mp->isBad()) {
+            act = DEL;
+        } else if (ob_cnt < 2) {
+            if (mp->lifespan >= 0) {
+                act = STAY;
+                mp->lifespan--;
+            } else {
+                act = DEL;
+            }
+
         } else {
+            act = SAVE;
+        }
+
+        if (act == DEL) {
+            DelAllMappointObservation(mp);
+        } else if (act == STAY) {
             recent_created_mps.push_back(mp);
+        } else if (act == SAVE) {
+            all_mappoints.insert(mp);
         }
     }
 
@@ -98,6 +117,12 @@ void Map::AddKeyFrame(FrameRef frame) {
             Map::UpdateConnections(kf);
         }
     }
+
+    //  create index from mappoints to this frame ;
+    for (auto obj : std::vector<ObjectRef>({frame->LEFT, frame->WIDE}))
+        for (auto mpr : obj->GetMapPoints()) {
+            mpr->BindKeyFrame(frame, obj);
+        }
 
     // update
 
@@ -127,13 +152,7 @@ void Map::DelKeyFrame(FrameRef frame) {
     }
 }
 
-void Map::AddMapPoint(MapPointRef mp) { all_mappoints.insert(mp); }
-
-void Map::DelMapPoint(MapPointRef mp) {
-    if (all_mappoints.count(mp) == 0) {
-        return;
-    }
-    all_mappoints.erase(mp);
+void Map::DelAllMappointObservation(MapPointRef mp) {
     for (auto ob : mp->GetAllObservation()) {
         KeyFrame kf = ob.first;
         for (ObjectRef obj : ob.second) {
@@ -149,11 +168,13 @@ void Map::Clear() {
     }
     all_keyframes.clear();
     WRITELOCK _lock(mtx_connection);
-    this->essential_gragh.clear();
-    this->parent_kf.clear();
-    this->loop_kfs.clear();
+    essential_gragh.clear();
+    parent_kf.clear();
+    loop_kfs.clear();
     // 2. Then , the mappoints can be free without mem leaky!
     all_mappoints.clear();
+
+    trajectories.clear();
 }
 
 int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1, KeyFrame kf2, float min_baseline,
@@ -180,14 +201,13 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
     // Check first that baseline is not too short
     cv::Mat Ow2 = obj2->GetCameraCenter();
 
-    cv::Mat vBaseline = Ow2 - Ow1;
-
-    const float baseline = cv::norm(vBaseline);
+    const float baseline = cv::norm(Ow2 - Ow1);
 
     // median depth in obj2, why use obj2 not obj1 ?
     const float median_depth = obj2->ComputeSceneMedianDepth();
-    if (baseline < min_baseline || baseline / median_depth > 10) {
-        fmt::print("Mapping::Trianglize:: traslation too less or large than baseline [{} < {}]\n", baseline, min_baseline);
+    if (baseline < min_baseline || (obj2->MapPointSize() && baseline / obj2->ComputeSceneMedianDepth() > 3)) {
+        fmt::print("Mapping::Trianglize:: traslation too less or large than baseline [{} < {} || {} > {}] \n", baseline, min_baseline, baseline,
+                   median_depth);
         return 0;
     }
 
@@ -197,10 +217,10 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
     auto match_res = Matcher::DBowMatch(obj1->desps, obj1->bow_feature, obj2->desps, obj2->bow_feature)
                          .FilterRatio(0.6)
                          .FilterThreshold(64)
-                         .FilterOrientation(obj1->kps, obj2->kps);
-    //  .FilterFMatrix(obj1->kps, obj2->kps, F12, obj2->extractor->mvLevelSigma2);
-    match_res.Show(fmt::format("trangle  bow match", match_res.size()), obj1, obj2);
-    cv::waitKey(30);
+                         .FilterOrientation(obj1->kps, obj2->kps)
+                         .FilterFMatrix(obj1->kps, obj2->kps, F12, obj2->extractor->mvLevelSigma2);
+    // match_res.Show(fmt::format("trangle  bow match", match_res.size()), obj1, obj2);
+    // cv::waitKey(30);
     if (match_res.size() < 10) {
         return 0;
     }
@@ -350,7 +370,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         // Triangulation is succesfull
 
-        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), kf2->id);
+        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), kf2->id, obj2->name);
         obj1->AddMapPoint(new_mp, m.queryIdx);
         obj2->AddMapPoint(new_mp, m.trainIdx);
 
@@ -362,7 +382,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         cnt++;
     }
-
+    fmt::print("create {} {} mps\n", obj2->name, cnt);
     return cnt;
 }
 
@@ -385,16 +405,24 @@ cv::Mat Map::ComputeF12(ObjectRef& rig1, ObjectRef& rig2) {
 
 std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
     std::vector<cv::Mat> ret;
-    for (const KeyFrame& kf : all_keyframes) {
-        ret.push_back(kf->LEFT->GetPoseInverse());
+    for (std::pair<cv::Mat, KeyFrame>& p : trajectories) {
+        cv::Mat T_fi_world = p.first * p.second->GetPose();
+        ret.push_back(T_fi_world);
     }
     return ret;
 }
 
-std::vector<cv::Mat> Map::GetAllMappointsForShow() {
+std::vector<cv::Mat> Map::GetAllMappointsForShow(CAM_NAME cam_name) {
     std::vector<cv::Mat> ret;
+
     for (const MapPointRef& mpr : all_mappoints) {
-        ret.push_back(mpr->position_w);
+        if (mpr->create_from == cam_name) ret.push_back(mpr->position_w);
+    }
+    for (uint i = 0, sz = recent_created_mps.size(); i < sz; i++) {
+        MapPointRef mpr = recent_created_mps.front();
+        recent_created_mps.pop_front();
+        recent_created_mps.push_back(mpr);
+        if (mpr->create_from == cam_name) ret.push_back(mpr->position_w);
     }
     return ret;
 }
@@ -572,5 +600,7 @@ std::unordered_set<KeyFrame> Map::GrabAnchorKeyFrames(std::unordered_set<KeyFram
     }
     return kfs_anchor;
 }
+
+void Map::AddFramePose(cv::Mat Tcw, KeyFrame rkf) { trajectories.push_back({Tcw, rkf}); }
 
 }  // namespace MCVSLAM

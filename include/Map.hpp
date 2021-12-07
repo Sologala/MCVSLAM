@@ -27,15 +27,14 @@ class Map {
     Map(std::string config_file);
     ~Map(){};
     static uint cnt_kf, used_kf, cnt_mp, used_mp;
-    MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint kf_id);
-    MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint kf_id);
+    MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint kf_id, CAM_NAME cam_name);
+    MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint kf_id, CAM_NAME cam_name);
     FrameRef CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
                          BaseCamera *cam_wide);
 
     void AddKeyFrame(FrameRef frame);
     void DelKeyFrame(FrameRef frame);
-    void AddMapPoint(MapPointRef mp);
-    void DelMapPoint(MapPointRef mp);
+    void DelAllMappointObservation(MapPointRef mp);
 
     void Clear();
     // Mapping
@@ -45,7 +44,7 @@ class Map {
     static cv::Mat ComputeF12(ObjectRef &rig1, ObjectRef &rig2);
 
     // statistics
-    std::vector<cv::Mat> GetAllMappointsForShow();
+    std::vector<cv::Mat> GetAllMappointsForShow(CAM_NAME cam_name);
     std::vector<cv::Mat> GetAllKeyFrameForShow();
     int MapPointSize();
     int KeyFrameSize();
@@ -85,6 +84,7 @@ class Map {
 
     // configure variables
     uint connection_threshold;
+    uint mappoint_life_span;
 
     // recent_created_mappoints , need to check if those mappoing is ok.
     std::deque<MapPointRef> recent_created_mps;
