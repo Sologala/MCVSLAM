@@ -13,6 +13,7 @@
 #include <opencv2/opencv.hpp>
 #include <osg/Camera>
 #include <osg/CameraView>
+#include <osg/CopyOp>
 #include <osg/Depth>
 #include <osg/Geode>
 #include <osg/Geometry>
@@ -42,12 +43,104 @@
 #include <osgViewer/Scene>
 #include <osgViewer/Viewer>
 #include <thread>
+#include <tuple>
 
 #include "osg_follower.hpp"
 #include "pyp/yaml/yaml.hpp"
 
 using namespace std;
+std::unordered_map<CameraDataBase::CameraDespcriptor, osg::ref_ptr<osg::Geode>> CameraDataBase::database;
+osg::ref_ptr<osg::Geode> CameraDataBase::CreateCamera(uint r, uint g, uint b, uint width) {
+    CameraDespcriptor desp = 0;
+    desp <<= 8;
+    desp |= r;
+    desp <<= 8;
+    desp |= g;
+    desp <<= 8;
+    desp |= b;
+    desp <<= 8;
+    desp |= width;
 
+    if (database.count(desp) == 0) {
+        // create new camera
+        osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
+        osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
+        osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
+        osg::ref_ptr<osg::Geode> geode = new osg::Geode();
+        osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
+        osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
+        pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
+        if (width != 0) {
+            float w = width;
+            const float h = w * 0.75;
+            const float z = -w * 0.6;
+            v->push_back(osg::Vec3(0, 0, 0));
+            v->push_back(osg::Vec3(w, h, z));
+            v->push_back(osg::Vec3(0, 0, 0));
+            v->push_back(osg::Vec3(w, -h, z));
+            v->push_back(osg::Vec3(0, 0, 0));
+            v->push_back(osg::Vec3(-w, -h, z));
+            v->push_back(osg::Vec3(0, 0, 0));
+            v->push_back(osg::Vec3(-w, h, z));
+            v->push_back(osg::Vec3(0, 0, 0));
+            v->push_back(osg::Vec3(w, -h, z));
+            v->push_back(osg::Vec3(w, h, z));
+            v->push_back(osg::Vec3(w, -h, z));
+            v->push_back(osg::Vec3(-w, h, z));
+            v->push_back(osg::Vec3(-w, -h, z));
+            v->push_back(osg::Vec3(-w, h, z));
+            v->push_back(osg::Vec3(w, h, z));
+            v->push_back(osg::Vec3(-w, -h, z));
+            v->push_back(osg::Vec3(w, -h, z));
+            geom->setVertexArray(v.get());
+            //为每个顶点指定一种颜色
+            for (int i = 0, sz = v->size(); i < sz; ++i) {
+                c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
+            }
+            //如果没指定颜色则会变为黑色
+            geom->setColorArray(c.get());
+            geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+            //绘制 camera
+            geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, v->size()));
+            geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+            geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.), osg::StateAttribute::ON);
+            geode->addDrawable(pShapeDrawable.get());
+            geode->addDrawable(geom.get());
+        } else {
+            v->push_back(osg::Vec3(0, 0, 0));
+            for (int i = 0, sz = v->size(); i < sz; ++i) {
+                c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
+            }
+            geom->setColorArray(c.get());
+            geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+            //绘制 camera
+            geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));
+            geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+            geode->getOrCreateStateSet()->setAttribute(new osg::Point(4), osg::StateAttribute::ON);
+            geode->addDrawable(pShapeDrawable.get());
+            geode->addDrawable(geom.get());
+        }
+        database[desp] = geode;
+    }
+
+    return dynamic_cast<osg::Geode *>(database[desp]->clone(osg::CopyOp::SHALLOW_COPY));
+}
+cv::Mat SE3Inverse(const cv::Mat T) {
+    cv::Mat R = T.rowRange(0, 3).colRange(0, 3);
+    cv::Mat t = T.rowRange(0, 3).col(3);
+    cv::Mat T_inv = cv::Mat::eye(4, 4, T.type());
+    cv::Mat R_inv = R.t();
+    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
+    cv::Mat new_t = -R_inv * t;
+    new_t.copyTo(T_inv.rowRange(0, 3).col(3));
+    return new_t;
+}
+
+/* */
+cv::Mat right2left(cv::Mat T) {
+    static cv::Mat r2l = (cv::Mat_<float>(4, 4) << -1, 0, 0, 0, /* */ 0, 01, 0, 0, /* */ 0, 0, 1, 0, /* */ 0, 0, 0, 1);
+    return r2l * T;
+}
 void osg_viewer::Run() {
     is_commited = false;
     is_request_stop = false;
@@ -199,100 +292,25 @@ void osg_viewer::RequestStop() {
     is_request_stop = true;
 }
 
-void osg_viewer::DrawCams(const std::vector<cv::Mat> &Tcws, const std::vector<bool> &mask, uint r, uint g, uint b) {
+void osg_viewer::DrawPredictTracjectories(const std::vector<cv::Mat> &Tcws, const std::vector<bool> &mask, uint r, uint g, uint b) {
     fmt::print("draw {} keyframes \n", Tcws.size());
     for (uint i = 0, sz = Tcws.size(); i < sz; i++) {
         DrawCam(Tcws[i], mask[i], r, g, b);
     }
-    if (Tcws.size()) SetCurViewFollow(Tcws.back());
+    // if (Tcws.size()) SetCurViewFollow(Tcws.back());
 }
 
-cv::Mat SE3Inverse(const cv::Mat T) {
-    cv::Mat R = T.rowRange(0, 3).colRange(0, 3);
-    cv::Mat t = T.rowRange(0, 3).col(3);
-    cv::Mat T_inv = cv::Mat::eye(4, 4, T.type());
-    cv::Mat R_inv = R.t();
-    R_inv.copyTo(T_inv.rowRange(0, 3).colRange(0, 3));
-    cv::Mat new_t = -R_inv * t;
-    new_t.copyTo(T_inv.rowRange(0, 3).col(3));
-    return new_t;
+void osg_viewer::SetCurrentCamera(const cv::Mat Tcw) {
+    cv::Mat Tcw_lhs = right2left(Tcw);
+    cv::Mat Tcw_t;
+    cv::transpose(Tcw_lhs, Tcw_t);
+    osg::Matrixd mat(Tcw_t.ptr<float>());
+    node_curr_cam->setMatrix(mat);
 }
 
-/* */
-cv::Mat right2left(cv::Mat T) {
-    static cv::Mat r2l = (cv::Mat_<float>(4, 4) << -1, 0, 0, 0, /* */ 0, 01, 0, 0, /* */ 0, 0, 1, 0, /* */ 0, 0, 0, 1);
-    return r2l * T;
-}
 void osg_viewer::DrawCam(const cv::Mat Tcw, bool ned_shape, uint r, uint g, uint b) {
-    osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
-    osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
-    pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
-
-    const float &w = camera_width;
-    const float h = w * 0.75;
-    const float z = -w * 0.6;
-    //创建保存几何信息的对象
-    osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
-    osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
-    osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
-    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
-
-    double lineLength = 100.0;
-    if (ned_shape) {
-        //创建四个顶点
-        v->push_back(osg::Vec3(0, 0, 0));
-        v->push_back(osg::Vec3(w, h, z));
-        v->push_back(osg::Vec3(0, 0, 0));
-        v->push_back(osg::Vec3(w, -h, z));
-        v->push_back(osg::Vec3(0, 0, 0));
-        v->push_back(osg::Vec3(-w, -h, z));
-        v->push_back(osg::Vec3(0, 0, 0));
-        v->push_back(osg::Vec3(-w, h, z));
-        v->push_back(osg::Vec3(0, 0, 0));
-        v->push_back(osg::Vec3(w, -h, z));
-        v->push_back(osg::Vec3(w, h, z));
-        v->push_back(osg::Vec3(w, -h, z));
-
-        v->push_back(osg::Vec3(-w, h, z));
-        v->push_back(osg::Vec3(-w, -h, z));
-
-        v->push_back(osg::Vec3(-w, h, z));
-        v->push_back(osg::Vec3(w, h, z));
-        v->push_back(osg::Vec3(-w, -h, z));
-        v->push_back(osg::Vec3(w, -h, z));
-        geom->setVertexArray(v.get());
-        //为每个顶点指定一种颜色
-        for (int i = 0, sz = v->size(); i < sz; ++i) {
-            c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
-        }
-        //如果没指定颜色则会变为黑色
-        geom->setColorArray(c.get());
-        geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-        //绘制 camera
-        geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, v->size()));
-        geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-        geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.), osg::StateAttribute::ON);
-        geode->addDrawable(pShapeDrawable.get());
-        geode->addDrawable(geom.get());
-
-    } else {
-        v->push_back(osg::Vec3(0, 0, 0));
-        for (int i = 0, sz = v->size(); i < sz; ++i) {
-            c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
-        }
-        //如果没指定颜色则会变为黑色
-        geom->setColorArray(c.get());
-        geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-        //绘制 camera
-        geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));
-        geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-        geode->getOrCreateStateSet()->setAttribute(new osg::Point(2 * mappoint_size), osg::StateAttribute::ON);
-        geode->addDrawable(pShapeDrawable.get());
-        geode->addDrawable(geom.get());
-    }
-
+    osg::ref_ptr<osg::Geode> geode = CameraDataBase::CreateCamera(r, g, b, (ned_shape ? camera_width : 0));
     osg::ref_ptr<osg::MatrixTransform> trans = new osg::MatrixTransform();
-
     trans->addChild(geode);
     cv::Mat Tcw_lhs = right2left(Tcw);
     cv::Mat Tcw_t;
@@ -310,7 +328,6 @@ void osg_viewer::SetCurViewFollow(const cv::Mat Tcw) {
     // osg::Matrixd mat(Tcw_t.ptr<float>());
     osg::Matrixd mat;
     mat.makeTranslate(osg::Vec3d(t.at<float>(0), t.at<float>(1), t.at<float>(2)));
-
     viewer->getCameraManipulator()->setByMatrix(tf * follow_tf * mat);
 }
 
@@ -403,7 +420,9 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     points_cams = new osg::MatrixTransform();
     points_cams_align = new osg::MatrixTransform();
     Parse(config_file);
-    node_environment = new osg::Group();
+    layer_environment = new osg::Group();
+    layer_curr_cam = new osg::MatrixTransform();
+    node_curr_cam = new osg::MatrixTransform();
     if (is_show_model) {
         osg::ref_ptr<osg::Node> model = osgDB::readRefNodeFile(model_path);
         osg::Vec3 vcenter = model->getBound().center();
@@ -411,7 +430,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
         tf->setMatrix(osg::Matrix::translate(osg::Vec3(0, 0, -vcenter[2])));
         tf->addChild(model);
 
-        node_environment->addChild(tf);
+        layer_environment->addChild(tf);
     }
 
     // Create viewer
@@ -425,7 +444,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
 
     scene->addChild(CreateCoordinate());
     if (is_show_model) {
-        scene->addChild(node_environment);
+        scene->addChild(layer_environment);
     }
 
     // load ground truth traj
@@ -438,8 +457,13 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     // points_cams->setMatrix(osg::Matrix(osg::Quat(0, 1, 0, 0)));
     points_cams_align->addChild(points_cams);
 
+    // create current cam
+    layer_curr_cam->addChild(node_curr_cam);
+    layer_curr_cam->setMatrix(tf);
+    node_curr_cam->addChild(CameraDataBase::CreateCamera(0, 225, 0, camera_width));
     // create points and cams
     scene->addChild(points_cams_align);
+    scene->addChild(layer_curr_cam);
 
     viewer->setUpViewInWindow(wnd_rect.x, wnd_rect.y, wnd_rect.width, wnd_rect.height);
     // viewer->setCameraManipulator(nullptr);
