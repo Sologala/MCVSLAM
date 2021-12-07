@@ -31,7 +31,7 @@
 
     $$ e = ||z_{messured} - z_{buffer_from osg} ||_2^2$$
 
-
+![](./.readme/Peek_odometry.gif)
 ![](./.readme/align_result.png)
 ![](./.readme/osg_model_visulization.png)
 
