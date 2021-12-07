@@ -199,10 +199,10 @@ void osg_viewer::RequestStop() {
     is_request_stop = true;
 }
 
-void osg_viewer::DrawCams(const std::vector<cv::Mat> &Tcws, uint r, uint g, uint b) {
+void osg_viewer::DrawCams(const std::vector<cv::Mat> &Tcws, const std::vector<bool> &mask, uint r, uint g, uint b) {
     fmt::print("draw {} keyframes \n", Tcws.size());
-    for (cv::Mat Tcw : Tcws) {
-        DrawCam(Tcw, r, g, b);
+    for (uint i = 0, sz = Tcws.size(); i < sz; i++) {
+        DrawCam(Tcws[i], mask[i], r, g, b);
     }
     if (Tcws.size()) SetCurViewFollow(Tcws.back());
 }
@@ -223,7 +223,7 @@ cv::Mat right2left(cv::Mat T) {
     static cv::Mat r2l = (cv::Mat_<float>(4, 4) << -1, 0, 0, 0, /* */ 0, 01, 0, 0, /* */ 0, 0, 1, 0, /* */ 0, 0, 0, 1);
     return r2l * T;
 }
-void osg_viewer::DrawCam(cv::Mat Tcw, uint r, uint g, uint b) {
+void osg_viewer::DrawCam(const cv::Mat Tcw, bool ned_shape, uint r, uint g, uint b) {
     osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
     osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
     pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
@@ -233,50 +233,63 @@ void osg_viewer::DrawCam(cv::Mat Tcw, uint r, uint g, uint b) {
     const float z = -w * 0.6;
     //创建保存几何信息的对象
     osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
+    osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
+    osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
+    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
 
     double lineLength = 100.0;
+    if (ned_shape) {
+        //创建四个顶点
+        v->push_back(osg::Vec3(0, 0, 0));
+        v->push_back(osg::Vec3(w, h, z));
+        v->push_back(osg::Vec3(0, 0, 0));
+        v->push_back(osg::Vec3(w, -h, z));
+        v->push_back(osg::Vec3(0, 0, 0));
+        v->push_back(osg::Vec3(-w, -h, z));
+        v->push_back(osg::Vec3(0, 0, 0));
+        v->push_back(osg::Vec3(-w, h, z));
+        v->push_back(osg::Vec3(0, 0, 0));
+        v->push_back(osg::Vec3(w, -h, z));
+        v->push_back(osg::Vec3(w, h, z));
+        v->push_back(osg::Vec3(w, -h, z));
 
-    //创建四个顶点
-    osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
-    v->push_back(osg::Vec3(0, 0, 0));
-    v->push_back(osg::Vec3(w, h, z));
-    v->push_back(osg::Vec3(0, 0, 0));
-    v->push_back(osg::Vec3(w, -h, z));
-    v->push_back(osg::Vec3(0, 0, 0));
-    v->push_back(osg::Vec3(-w, -h, z));
-    v->push_back(osg::Vec3(0, 0, 0));
-    v->push_back(osg::Vec3(-w, h, z));
-    v->push_back(osg::Vec3(0, 0, 0));
-    v->push_back(osg::Vec3(w, -h, z));
-    v->push_back(osg::Vec3(w, h, z));
-    v->push_back(osg::Vec3(w, -h, z));
+        v->push_back(osg::Vec3(-w, h, z));
+        v->push_back(osg::Vec3(-w, -h, z));
 
-    v->push_back(osg::Vec3(-w, h, z));
-    v->push_back(osg::Vec3(-w, -h, z));
+        v->push_back(osg::Vec3(-w, h, z));
+        v->push_back(osg::Vec3(w, h, z));
+        v->push_back(osg::Vec3(-w, -h, z));
+        v->push_back(osg::Vec3(w, -h, z));
+        geom->setVertexArray(v.get());
+        //为每个顶点指定一种颜色
+        for (int i = 0, sz = v->size(); i < sz; ++i) {
+            c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
+        }
+        //如果没指定颜色则会变为黑色
+        geom->setColorArray(c.get());
+        geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+        //绘制 camera
+        geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, v->size()));
+        geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+        geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.), osg::StateAttribute::ON);
+        geode->addDrawable(pShapeDrawable.get());
+        geode->addDrawable(geom.get());
 
-    v->push_back(osg::Vec3(-w, h, z));
-    v->push_back(osg::Vec3(w, h, z));
-    v->push_back(osg::Vec3(-w, -h, z));
-    v->push_back(osg::Vec3(w, -h, z));
-    geom->setVertexArray(v.get());
-
-    //为每个顶点指定一种颜色
-    osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
-    for (int i = 0, sz = v->size(); i < sz; ++i) {
-        c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
+    } else {
+        v->push_back(osg::Vec3(0, 0, 0));
+        for (int i = 0, sz = v->size(); i < sz; ++i) {
+            c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
+        }
+        //如果没指定颜色则会变为黑色
+        geom->setColorArray(c.get());
+        geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+        //绘制 camera
+        geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));
+        geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+        geode->getOrCreateStateSet()->setAttribute(new osg::Point(2 * mappoint_size), osg::StateAttribute::ON);
+        geode->addDrawable(pShapeDrawable.get());
+        geode->addDrawable(geom.get());
     }
-    //如果没指定颜色则会变为黑色
-    geom->setColorArray(c.get());
-    geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-
-    //绘制 camera
-    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, v->size()));  // X
-
-    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
-    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.), osg::StateAttribute::ON);
-    geode->addDrawable(pShapeDrawable.get());
-    geode->addDrawable(geom.get());
 
     osg::ref_ptr<osg::MatrixTransform> trans = new osg::MatrixTransform();
 

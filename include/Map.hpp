@@ -46,6 +46,8 @@ class Map {
     // statistics
     std::vector<cv::Mat> GetAllMappointsForShow(CAM_NAME cam_name);
     std::vector<cv::Mat> GetAllKeyFrameForShow();
+    std::vector<bool> GetAllKeyFrameMaskForShow();
+
     int MapPointSize();
     int KeyFrameSize();
 
@@ -65,7 +67,7 @@ class Map {
     std::unordered_set<KeyFrame> GrabAnchorKeyFrames(std::unordered_set<KeyFrame> &kfs);
 
     // Tracjtory
-    void AddFramePose(cv::Mat Tcw, KeyFrame rkf);
+    void AddFramePose(cv::Mat Tcw, KeyFrame rkf, bool isKeyFrame = false);
 
    public:
     std::unordered_set<MapPointRef> all_mappoints;
@@ -90,7 +92,7 @@ class Map {
     std::deque<MapPointRef> recent_created_mps;
 
     // Tracjtory    [tracking ]
-    std::vector<std::pair<cv::Mat, KeyFrame>> trajectories;
+    std::vector<std::tuple<cv::Mat, KeyFrame, bool>> trajectories;
 };
 
 }  // namespace MCVSLAM

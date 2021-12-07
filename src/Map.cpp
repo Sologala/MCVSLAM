@@ -405,13 +405,21 @@ cv::Mat Map::ComputeF12(ObjectRef& rig1, ObjectRef& rig2) {
 
 std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
     std::vector<cv::Mat> ret;
-    for (std::pair<cv::Mat, KeyFrame>& p : trajectories) {
-        cv::Mat T_fi_world = p.first * p.second->GetPose();
+    for (std::tuple<cv::Mat, KeyFrame, bool>& p : trajectories) {
+        cv::Mat tf = std::get<0>(p);
+        cv::Mat Tkf_w = std::get<1>(p)->GetPose();
+        cv::Mat T_fi_world = tf * Tkf_w;
         ret.push_back(T_fi_world);
     }
     return ret;
 }
-
+std::vector<bool> Map::GetAllKeyFrameMaskForShow() {
+    std::vector<bool> ret;
+    for (std::tuple<cv::Mat, KeyFrame, bool>& p : trajectories) {
+        ret.push_back(std::get<2>(p));
+    }
+    return ret;
+}
 std::vector<cv::Mat> Map::GetAllMappointsForShow(CAM_NAME cam_name) {
     std::vector<cv::Mat> ret;
 
@@ -601,6 +609,6 @@ std::unordered_set<KeyFrame> Map::GrabAnchorKeyFrames(std::unordered_set<KeyFram
     return kfs_anchor;
 }
 
-void Map::AddFramePose(cv::Mat Tcw, KeyFrame rkf) { trajectories.push_back({Tcw, rkf}); }
+void Map::AddFramePose(cv::Mat Tcw, KeyFrame rkf, bool isKeyFrame) { trajectories.push_back({Tcw, rkf, isKeyFrame}); }
 
 }  // namespace MCVSLAM

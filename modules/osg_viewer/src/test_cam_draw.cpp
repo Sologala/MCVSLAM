@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     cv::Mat t = cam_pos.rowRange(0, 3).col(3);
 
     cout << cam_pos << endl;
-    viewer.DrawCam(cam_pos, 0, 225, 0);
+    viewer.DrawCam(cam_pos, true, 0, 225, 0);
     viewer.Commit();
     viewer.Run();
     // viewer.getCamera()->setViewMatrix(mat);

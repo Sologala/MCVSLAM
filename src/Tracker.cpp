@@ -50,6 +50,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
             // system has been initialized!
             if (velocity.empty() || (GetLastKeyFrame() && GetLastKeyFrame()->id + 5 >= cur_frame->id)) {
                 // track by bow with LastKeyFrame
+                MyTimer::Timer _("Track LastKeyFrame");
                 uint cnt_l = Bow_Track(GetLastKeyFrame()->LEFT, cur_frame->LEFT);
                 uint cnt_w = Bow_Track(GetLastKeyFrame()->WIDE, cur_frame->WIDE);
                 cur_frame->SetPose(GetLastFrame()->GetPose());
@@ -62,10 +63,12 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                 }
             } else if (0 && !velocity.empty()) {
                 // track by MotionModel
+                MyTimer::Timer _("Track MotionModel");
                 cur_frame->SetPose(GetLastFrame()->GetPose() * velocity);
                 uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(GetLastKeyFrame()->LEFT->GetMapPoints());
                 uint pcntw = cur_frame->WIDE->ProjectBunchMapPoints(GetLastKeyFrame()->WIDE->GetMapPoints());
                 int cnt = PoseEstimation::PoseOptimization(cur_frame);
+                _.tock();
                 fmt::print("track MotionModel {} project left {} project wide  {}\n", cnt, pcnt, pcntw);
                 if (cnt < 50) {
                     fmt::print("Track MotionModel Faild! \n");
@@ -89,6 +92,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
             // if (state == Track_State::OK)
             {
                 // track local map
+                MyTimer::Timer _("Track Local Map");
                 auto local_kfs = map->GrabLocalMap_Mappoint(cur_frame, 3);
                 auto local_mps = map->GrabLocalMappoint(local_kfs, CAM_NAME::L);
                 auto local_mps_wide = map->GrabLocalMappoint(local_kfs, CAM_NAME::W);
@@ -118,11 +122,6 @@ Track_State Tracker::Track(FrameRef cur_frame) {
         exit(0);
     }
 
-    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
-    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
-    viewer->DrawCams(map->GetAllKeyFrameForShow(), 0, 0, 225);
-    viewer->Commit();
-
     // Calculate velocity
     if (GetLastFrame()) {
         velocity = GetLastKeyFrame()->GetPose().inv() * cur_frame->GetPose();
@@ -141,8 +140,14 @@ Track_State Tracker::Track(FrameRef cur_frame) {
     // Commit this frame to the Trajectory
     {
         cv::Mat T_cur_rfk = cur_frame->GetPose() * GetLastKeyFrame()->GetPoseInverse();
-        map->AddFramePose(T_cur_rfk, GetLastKeyFrame());
+        map->AddFramePose(T_cur_rfk, GetLastKeyFrame(), GetLastKeyFrame() == cur_frame);
     }
+
+    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
+    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
+    viewer->DrawCams(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
+    viewer->Commit();
+
     fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
     for (auto p : MyTimer::Timer::COUNT) {
         fmt::print("{:^20}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(), p.second.fps());

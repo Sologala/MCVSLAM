@@ -52,7 +52,11 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     WIDE->AssignFeaturesToGrid();
 
     depth_left.resize(LEFT->size(), -1);
-    ComputeStereoMatch(LEFT, RIGHT);
+
+    {
+        MyTimer::Timer _("Stereo Matching");
+        ComputeStereoMatch(LEFT, RIGHT);
+    }
 }
 
 Frame::~Frame() {
