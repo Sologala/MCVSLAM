@@ -6,6 +6,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/video/tracking.hpp>
+#include <vector>
 
 #include "Frame.hpp"
 #include "Map.hpp"
@@ -18,7 +19,15 @@
 using namespace std;
 namespace MCVSLAM {
 
-Tracker::Tracker(Map* _map, osg_viewer* _viewer) : map(_map), viewer(_viewer) {}
+Tracker::Tracker(Map* _map, osg_viewer* _viewer, const std::string& config_file) : map(_map), viewer(_viewer) {
+    Yaml::Node root;
+    Yaml::Parse(root, config_file);
+    Th_depth = root["Th_depth"].As<float>();
+    Th_motionmodel_min_mps = root["Th_motionmodel_min_mps"].As<float>();
+    Th_local_map_min_mps = root["Th_local_map_min_mps"].As<float>();
+    Th_lastkeyframe_min_mps = root["Th_lastkeyframe_min_mps"].As<float>();
+    Th_max_frame_interval = root["Th_max_frame_interval"].As<uint>();
+}
 
 Tracker::~Tracker() {}
 
@@ -36,7 +45,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                 cv::Mat T_cur_rfk = cur_frame->GetPoseInverse() * GetLastKeyFrame()->GetPose();
                 map->AddFramePose(T_cur_rfk, GetLastKeyFrame());
             }
-            return Track_State::OK;
+            state = Track_State::OK;
         } else {
             // init faild
             delete cur_frame;
@@ -61,16 +70,24 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                     // exit(0);
                     state = Track_State::LOST;
                 }
-            } else if (0 && !velocity.empty()) {
+            } else if (!velocity.empty()) {
                 // track by MotionModel
                 MyTimer::Timer _("Track MotionModel");
-                cur_frame->SetPose(GetLastFrame()->GetPose() * velocity);
-                uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(GetLastKeyFrame()->LEFT->GetMapPoints());
-                uint pcntw = cur_frame->WIDE->ProjectBunchMapPoints(GetLastKeyFrame()->WIDE->GetMapPoints());
+                cur_frame->SetPose(velocity * GetLastFrame()->GetPose());
+
+                viewer->SetCurrentCamera(cur_frame->GetPose());
+
+                auto lkfmps = GetLastKeyFrame()->LEFT->GetMapPoints();
+                auto lkfmps_wide = GetLastKeyFrame()->WIDE->GetMapPoints();
+                uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(lkfmps, 10);
+                uint pcntw = cur_frame->WIDE->ProjectBunchMapPoints(lkfmps_wide, 40);
                 int cnt = PoseEstimation::PoseOptimization(cur_frame);
                 _.tock();
+                auto k = getchar();
+                viewer->SetCurrentCamera(cur_frame->GetPose());
+
                 fmt::print("track MotionModel {} project left {} project wide  {}\n", cnt, pcnt, pcntw);
-                if (cnt < 50) {
+                if (cnt < Th_motionmodel_min_mps) {
                     fmt::print("Track MotionModel Faild! \n");
                     state = Track_State::TRACK_FAILD;
                     if (GetLastKeyFrame()) {
@@ -84,6 +101,8 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                             fmt::print("Track LastKeyFrame Faild! \n");
                             // exit(0);
                             state = Track_State::TRACK_FAILD;
+                        } else {
+                            state = Track_State::OK;
                         }
                     }
                 }
@@ -110,28 +129,29 @@ Track_State Tracker::Track(FrameRef cur_frame) {
                 }
             }
         }
+        if (state == Track_State::LOST) {
+            // delete cur_frame;
+            this->Clear();
+            map->Clear();
+            fmt::print("Track LOST with {} frame Please Press [q] key to exit\n", cur_frame->id);
+            while (getchar() != 'q')
+                ;
+            viewer->RequestStop();
+            exit(0);
+        }
+
+        // Calculate velocity
+        if (GetLastFrame()) {
+            velocity = cur_frame->GetPose() * GetLastFrame()->GetPoseInverse();
+        }
+
+        // Check if need new keyframe
+        if (CheckNeedNewKeyFrame(cur_frame)) {
+            map->AddKeyFrame(cur_frame);
+            SetLastKeyFrame(cur_frame);
+        }
     }
 
-    if (state == Track_State::LOST) {
-        // delete cur_frame;
-        this->Clear();
-        map->Clear();
-        fmt::print("Track LOST with {} frame Please Press any key to exit\n", cur_frame->id);
-        char _ = getchar();
-        viewer->RequestStop();
-        exit(0);
-    }
-
-    // Calculate velocity
-    if (GetLastFrame()) {
-        velocity = GetLastKeyFrame()->GetPose().inv() * cur_frame->GetPose();
-    }
-
-    // Check if need new keyframe
-    if ((cur_frame->id - GetLastKeyFrame()->id > 4)) {
-        map->AddKeyFrame(cur_frame);
-        SetLastKeyFrame(cur_frame);
-    }
     SetLastFrame(cur_frame);
     // fmt::print("kf {}/{} mp {}/{} \n", Map::cnt_kf, Map::used_kf, Map::cnt_mp, Map::used_mp);
     // fmt::print(" {} {} kfs in map  {} {} mps in map \n", Map::cnt_kf - Map::used_kf, map->KeyFrameSize(), Map::cnt_mp - Map::used_mp,
@@ -145,13 +165,15 @@ Track_State Tracker::Track(FrameRef cur_frame) {
 
     viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
     viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
-    viewer->DrawCams(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
+    viewer->DrawPredictTracjectories(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
+    viewer->SetCurrentCamera(cur_frame->GetPose());
     viewer->Commit();
 
     fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
     for (auto p : MyTimer::Timer::COUNT) {
         fmt::print("{:^20}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(), p.second.fps());
     }
+    char _ = getchar();
     return Track_State::OK;
 }
 
@@ -212,6 +234,55 @@ void Tracker::SetLastFrame(FrameRef f) {
     queue_frame.push_back(f);
 }
 
+bool Tracker::CheckNeedNewKeyFrame(KeyFrame cur_frame) {
+    // Tracked MapPoints in the reference keyframe
+    KeyFrame lastkf = GetLastKeyFrame();
+    if (lastkf == nullptr) return true;
+
+    int min_obs = 3;
+    uint obs_f_kf = cur_frame->LEFT->Covisibility(lastkf->LEFT);
+    uint mps_kf = lastkf->LEFT->MapPointSize();
+    // Check how many "close" points are being tracked and how many could be
+    // potentially created.
+    int nNonTrackedClose = 0;
+    int nTrackedClose = 0;
+    std::vector<float>& depth_left = cur_frame->depth_left;
+    for (int i = 0, sz = depth_left.size(); i < sz; i++) {
+        float z = depth_left[i];
+        if (z > 0 && z < Th_depth) {
+            if (cur_frame->LEFT->GetMapPoint(i))
+                nTrackedClose++;
+            else
+                nNonTrackedClose++;
+        }
+    }
+
+    bool bNeedToInsertClose;
+    bNeedToInsertClose = (nTrackedClose < 100) && (nNonTrackedClose > 70);
+
+    // Thresholds
+    float thRefRatio = 0.75f;
+    // Condition 1a: More than "MaxFrames" have passed from last keyframe
+    // insertion
+    const bool c1a = cur_frame->id >= GetLastKeyFrame()->id + Th_max_frame_interval;
+    // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
+
+    // const bool c1b = ((cur_frame->id >= mnLastKeyFrameId + mMinFrames) && bLocalMappingIdle);
+
+    // Condition 1c: tracking is weak
+    const bool c1c = (obs_f_kf < mps_kf * 0.25 || bNeedToInsertClose);
+    // Condition 2: Few tracked points compared to reference keyframe. Lots of
+    // visual odometry compared to map matches.
+    const bool c2 = (((obs_f_kf < mps_kf * thRefRatio || bNeedToInsertClose)) && obs_f_kf > 15);
+
+    // Temporal condition for Inertial cases
+
+    if (((c1a || c1c) && c2)) {
+        return true;
+    }
+    return false;
+}
+
 uint Tracker::Init(KeyFrame& cur_frame) {
     // stereo init
     // create mappoints / not initialized
@@ -222,7 +293,7 @@ uint Tracker::Init(KeyFrame& cur_frame) {
         if (depth != -1) {
             cv::Mat mp = cur_frame->LEFT->mpCam->unproject_z(kp.pt, depth);
             // cout << mp << endl;
-            auto mpr = map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->id, CAM_NAME::L);
+            auto mpr = map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->LEFT->kps[i].octave, cur_frame->id, CAM_NAME::L);
             cur_frame->LEFT->AddMapPoint(mpr, i);
             cnt += 1;
         }
