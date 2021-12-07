@@ -1,9 +1,12 @@
 #include "Object.hpp"
 
+#include <pyp/fmt/core.h>
+
 #include <cstddef>
 #include <opencv2/core.hpp>
 #include <opencv2/core/types.hpp>
 #include <type_traits>
+#include <unordered_set>
 
 #include "Map.hpp"
 #include "Matcher.hpp"
@@ -63,19 +66,27 @@ cv::Mat Object::GetTranslation() {
 std::vector<MapPointRef> Object::GetMapPointsVector() {
     std::vector<MapPointRef> ret;
     {
-        UNIQUELOCK lock(mtx_mps);
+        READLOCK lock(mtx_mps);
         ret.assign(all_mps.begin(), all_mps.end());
     }
     return ret;
 }
 
 std::unordered_set<MapPointRef> Object::GetMapPoints() {
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     return all_mps;
+}
+std::unordered_set<MapPointRef> Object::GetMapPoints(uint th_obs) {
+    READLOCK lock(mtx_mps);
+    std::unordered_set<MapPointRef> ret;
+    for (auto &mp : all_mps) {
+        if (mp->GetObservationCnt() >= th_obs) ret.insert(mp);
+    }
+    return ret;
 }
 
 void Object::clear() {
-    UNIQUELOCK lock(mtx_mps);
+    WRITELOCK lock(mtx_mps);
     mMP2IDX.clear();
     mIDX2MP.clear();
     all_mps.clear();
@@ -83,14 +94,14 @@ void Object::clear() {
 
 bool Object::count(MapPointRef pMP) {
     if (pMP == NULL) return false;
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     if (mMP2IDX.count(pMP) == 0) return false;
     return true;
 }
 
 bool Object::count(size_t idx) {
     if (idx < 0 || idx >= size()) return false;
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     if (mIDX2MP.count(idx) == 0) return false;
     return true;
 }
@@ -102,7 +113,7 @@ size_t Object::GetMapPointIdx(MapPointRef pMP) {
             ;
         return -1;
     }
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     //	data_check();
     if (mMP2IDX.count(pMP) == 0) {
         fmt::print("Not exist \n");
@@ -123,7 +134,7 @@ size_t Object::GetMapPointIdx(MapPointRef pMP) {
 }
 
 MapPointRef Object::GetMapPoint(size_t idx) {
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     if (idx >= size() || mIDX2MP.count(idx) == 0) return NULL;
     //	data_check();
 
@@ -135,7 +146,7 @@ MapPointRef Object::GetMapPoint(size_t idx) {
 void Object::replaceMapPoint(MapPointRef pMP, MapPointRef pMP1) {
     if (pMP == NULL || pMP1 == NULL) return;
     if (count(pMP) == false) return;
-    UNIQUELOCK lock(mtx_mps);
+    WRITELOCK lock(mtx_mps);
     size_t idx_ori = mMP2IDX[pMP];
     mIDX2MP.erase(idx_ori);
     mMP2IDX.erase(pMP);
@@ -148,7 +159,7 @@ void Object::replaceMapPoint(MapPointRef pMP, MapPointRef pMP1) {
 
 void Object::DelMapPoint(size_t idx) {
     if (idx >= size()) return;
-    UNIQUELOCK lock(mtx_mps);
+    WRITELOCK lock(mtx_mps);
     // std::unique_lock<std::mutex> lock(mtxMapPoints);
     if (mIDX2MP.count(idx) == 0) return;
     MapPointRef pMP = mIDX2MP[idx];
@@ -159,7 +170,7 @@ void Object::DelMapPoint(size_t idx) {
 
 void Object::DelMapPoint(MapPointRef pMP) {
     if (pMP == NULL) return;
-    UNIQUELOCK lock(mtx_mps);
+    WRITELOCK lock(mtx_mps);
     if (mMP2IDX.count(pMP) == 0) return;
     size_t idx = mMP2IDX[pMP];
     if (mIDX2MP.count(idx)) mIDX2MP.erase(idx);
@@ -168,15 +179,15 @@ void Object::DelMapPoint(MapPointRef pMP) {
 }
 
 size_t Object::MapPointSize() {
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     return all_mps.size();
 }
 
 uint Object::Covisibility(const ObjectRef &other) {
-    UNIQUELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     auto mps1 = other->GetMapPoints();
     uint cnt = 0;
-    for (const auto mp : all_mps) {
+    for (const auto &mp : all_mps) {
         if (mps1.count(mp)) {
             cnt++;
         }
@@ -198,7 +209,7 @@ void Object::AddMapPoint(MapPointRef pMP, size_t idx) {
     DelMapPoint(idx);
 
     {
-        UNIQUELOCK _lock(mtx_mps);
+        WRITELOCK _lock(mtx_mps);
         // if (mIDX2MP[idx]) {
         //     // check distance
         //     uint dist_ori = HammingDistance(pMP->GetDesp(), desps.row(idx));
@@ -278,10 +289,13 @@ uint Object::ProjectBunchMapPoints(const std::vector<MapPointRef> &mps, float r_
 uint Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, float r_threshold) {
     uint cnt = 0;
     for (const MapPointRef &mp : mps) {
-        cv::Point2f pt = this->mpCam->project(this->GetRotation() * mp->GetWorldPos() + this->GetTranslation());
+        cv::Mat Pc = this->GetRotation() * mp->GetWorldPos() + this->GetTranslation();
+        if (Pc.at<float>(2) < 0) continue;
+        cv::Point2f pt = this->mpCam->project(Pc);
 
         std::vector<cv::Mat> _desps;
-        std::vector<size_t> _ori_idx = GetFeaturesInArea(pt.x, pt.y, r_threshold);
+        float r = r_threshold * extractor->mvScaleFactor[mp->level];
+        std::vector<size_t> _ori_idx = GetFeaturesInArea(pt.x, pt.y, r);
         for (size_t idx : _ori_idx) {
             _desps.push_back(desps.row(idx));
         }
@@ -320,7 +334,9 @@ bool Object::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY) {
 vector<size_t> Object::GetFeaturesInArea(const float &x, const float &y, const float &r, const int minLevel, const int maxLevel) const {
     vector<size_t> vIndices;
     vIndices.reserve(size());
-
+    if (x < 0 || y < 0 || x >= bounddingbox.width || y >= bounddingbox.height) {
+        return vIndices;
+    }
     float factorX = r;
     float factorY = r;
 

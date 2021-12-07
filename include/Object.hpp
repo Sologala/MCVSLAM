@@ -62,6 +62,7 @@ class Object {
 
     std::vector<MapPointRef> GetMapPointsVector();
     std::unordered_set<MapPointRef> GetMapPoints();
+    std::unordered_set<MapPointRef> GetMapPoints(uint th_obs);
 
     size_t GetMapPointIdx(MapPointRef pMP);
 
@@ -103,7 +104,7 @@ class Object {
     void UpdatePoseMatrix();
 
    protected:
-    boost::mutex mtx_mps;
+    boost::shared_mutex mtx_mps;
     boost::shared_mutex mtx_pose;  // for pose
 
    public:
