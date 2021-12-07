@@ -25,17 +25,17 @@ Map::Map(std::string config_file) {
     mappoint_life_span = root["mappoint_life_span"].As<int>();
 }
 
-MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint kf_id, CAM_NAME cam_name) {
+MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name) {
     // MapPoint* mp = new MapPoint(x, y, z, _desp, mp_id++);
     // MapPointRef ret = std::shared_ptr<MapPoint>(mp);
     cnt_mp += 1;
-    return make_shared<MapPoint>(x, y, z, _desp, kf_id, mp_id++, cam_name, mappoint_life_span);
+    return make_shared<MapPoint>(x, y, z, _desp, _level, kf_id, mp_id++, cam_name, mappoint_life_span);
 }
 
-MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint kf_id, CAM_NAME cam_name) {
+MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name) {
     assert(!xyz.empty() && xyz.rows == 3);
 
-    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, kf_id, cam_name);
+    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, _level, kf_id, cam_name);
     recent_created_mps.push_back(ref);
     return ref;
 }
@@ -370,7 +370,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         // Triangulation is succesfull
 
-        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), kf2->id, obj2->name);
+        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), obj2->kps[m.trainIdx].octave, kf2->id, obj2->name);
         obj1->AddMapPoint(new_mp, m.queryIdx);
         obj2->AddMapPoint(new_mp, m.trainIdx);
 

@@ -21,7 +21,7 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     friend class Map;
 
    public:
-    MapPoint(double x, double y, double z, cv::Mat _desp, uint _kf_id, uint _id, CAM_NAME _created_from, uint _life_span);
+    MapPoint(double x, double y, double z, cv::Mat _desp, uint _level, uint _kf_id, uint _id, CAM_NAME _created_from, uint _life_span);
 
     ~MapPoint();
 
@@ -36,6 +36,7 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
 
     const std::unordered_set<KeyFrame> GetAllKeyFrame();
     const Observation GetAllObservation();
+    const uint GetObservationCnt();
 
     // normal adn median depth
     cv::Mat GetNormalVector();
@@ -48,6 +49,7 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     // Position in absolute coordinates
     cv::Mat position_w;
     cv::Mat desp;
+    uint level;
     uint id;
     uint kf_id;
     boost::shared_mutex mtx_pos;
