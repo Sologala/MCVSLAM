@@ -37,7 +37,7 @@ Map _map("/home/wen/SLAM/MCVSLAM/config/system.yaml");
 cv::Mat velocity;
 std::queue<FrameRef> localMap;
 Pinhole cam_left("/home/wen/SLAM/MCVSLAM/config/camleft.yaml"), cam_wide("/home/wen/SLAM/MCVSLAM/config/camwide.yaml");
-Tracker tracker(&_map, &viewer);
+Tracker tracker(&_map, &viewer, "/home/wen/SLAM/MCVSLAM/config/system.yaml");
 void track(std::vector<cv::Mat> &imgs, double time_stamp) {
     // 1.construct Frame
     std::vector<cv::Mat> imggrays(3);

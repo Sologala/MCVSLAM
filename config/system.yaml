@@ -1,2 +1,10 @@
 connection_threshold: 15
 mappoint_life_span: 5
+
+
+# Tracking 
+Th_depth: 35
+Th_motionmodel_min_mps: 40
+Th_local_map_min_mps: 50
+Th_lastkeyframe_min_mps: 50
+Th_max_frame_interval: 10

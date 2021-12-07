@@ -1,6 +1,7 @@
-# multi camera repo 
+# Multi Camera Visual SlAM 
+This repo is aim to realise a simple visual slam system which support multi camera configruation. Meanwhile, we also utilize the OpensceneGraph to simulate some drone motion scene with groundtrugh trajectory, also use it to visulize our sparse mapping result, and try to find some strategies to improve the system.
 
-
+Currently, I am mainly use it to build a convinent platform for accomplish my thesis. So I have no more energy to manage pull request and merge request, Any idea or question or suggestion is welcome to be descuss in issues.
 
 # Feature
 - Multi camera hierarchical optimization based on multi resolution cameras observation.
@@ -20,14 +21,15 @@
 
 # TODO 
 - [X] [Capture](./modules/capture/README.md)
-- [ ] 图像读取、矫正、预处理， 
+- [ ] Image Rectification && pre-process (`currently, test data are simulated from osg, no need to do`)  
 - [X] local feature extractor (ORB | SURF | Super Point) \ matcher
 - [X] [OSG](https://github.com/openscenegraph/OpenSceneGraph) Viewer 、Visulization Tracjtory and Camera and Maps.
 - [X] Visual Odemetry
 - [X] Local Mapping with Essential Graph
 - [ ] LoopClosing with Dbow 
-- [ ] Visualization of Essengraph
+- [ ] Visualization of Essentialgraph
 - [ ] Quantifiation of Reprojection Error with Scene Model,  Calculated by 
+- [ ] Build instruction (`If someone is intrested on this prototype`)
 
     $$ e = ||z_{messured} - z_{buffer_from osg} ||_2^2$$
 
@@ -76,7 +78,7 @@
 
 
 
-![](./.readme/Peek_odometry.gif)
+![](./.readme/demo.gif)
 ![](./.readme/align_result.png)
 ![](./.readme/osg_model_visulization.png)
 
