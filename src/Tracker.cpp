@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <memory>
+#include <opencv2/core/types.hpp>
 #include <opencv2/features2d.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/video/tracking.hpp>
@@ -189,25 +190,6 @@ void Tracker::Clear() {
     fmt::print("Tracker cleared\n");
 }
 
-uint Tracker::Bow_Track(ObjectRef obj1, ObjectRef obj2) {
-    obj1->ComputeBow();
-    obj2->ComputeBow();
-    MatchRes res = Matcher::DBowMatch(obj1->desps, obj1->bow_feature, obj2->desps, obj2->bow_feature).FilterRatio().FilterThreshold();
-    cv::Mat show_img;
-    // cv::drawMatches(obj1->img, obj1->kps, obj2->img, obj2->kps, res, show_img);
-    // cv::imshow("show_img", show_img);
-    // cv::waitKey(10);
-    uint cnt = 0;
-    for (const auto& p : res) {
-        MapPointRef mp = obj1->GetMapPoint(p.queryIdx);
-        if (mp != NULL) {
-            obj2->AddMapPoint(mp, p.trainIdx);
-            cnt++;
-        }
-    }
-    return cnt;
-}
-
 KeyFrame Tracker::GetLastKeyFrame() {
     if (queue_keyframe.empty()) return nullptr;
     return queue_keyframe.back();
@@ -304,7 +286,44 @@ uint Tracker::Init(KeyFrame& cur_frame) {
 
 void Tracker::KL_Track(ObjectRef obj1, ObjectRef obj2) {
     // cv::Mat res, err;
-    // cv::calcOpticalFlowPyrLK(obj1->img, obj2.img, obj1->kps, obj2.kps, res, err);
+    MyTimer::Timer _("KL Track");
+    std::vector<cv::KeyPoint> kps;
+    std::vector<cv::KeyPoint> next_kps;
+    std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
+    std::vector<uint> kps_idxs;
+    for (const auto& mp : mps) {
+        uint idx = obj1->GetMapPointIdx(mp);
+        kps.push_back(obj1->kps[idx]);
+        kps_idxs.push_back(idx);
+    }
+    std::vector<uchar> res;
+    std::vector<float> err;
+
+    cv::calcOpticalFlowPyrLK(obj1->img, obj2->img, kps, next_kps, res, err);
+    for (uint i = 0, sz = res.size(); i < sz; i++) {
+        if (res[i] > 0 && err[i] < 1) {
+            obj2->AddMapPoint(mps[i], kps_idxs[i]);
+        }
+    }
+}
+
+uint Tracker::Bow_Track(ObjectRef obj1, ObjectRef obj2) {
+    obj1->ComputeBow();
+    obj2->ComputeBow();
+    MatchRes res = Matcher::DBowMatch(obj1->desps, obj1->bow_feature, obj2->desps, obj2->bow_feature).FilterRatio().FilterThreshold();
+    cv::Mat show_img;
+    // cv::drawMatches(obj1->img, obj1->kps, obj2->img, obj2->kps, res, show_img);
+    // cv::imshow("show_img", show_img);
+    // cv::waitKey(10);
+    uint cnt = 0;
+    for (const auto& p : res) {
+        MapPointRef mp = obj1->GetMapPoint(p.queryIdx);
+        if (mp != NULL) {
+            obj2->AddMapPoint(mp, p.trainIdx);
+            cnt++;
+        }
+    }
+    return cnt;
 }
 
 }  // namespace MCVSLAM

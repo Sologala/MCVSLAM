@@ -41,9 +41,9 @@ MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf
 }
 
 FrameRef Map::CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right,
-                          BaseCamera* cam_wide) {
+                          BaseCamera* cam_wide, const std::vector<FrameRef>& optical_flow_frams) {
     cnt_kf += 1;
-    return new Frame(imgleft, imgright, imgwide, time_stamp, cam_left, cam_right, cam_wide, frame_id++);
+    return new Frame(imgleft, imgright, imgwide, time_stamp, cam_left, cam_right, cam_wide, frame_id++, optical_flow_frams);
 }
 
 void Map::AddKeyFrame(FrameRef frame) {

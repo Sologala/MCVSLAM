@@ -30,12 +30,41 @@ float Frame::b, Frame::bf, Frame::b_2;
 
 int extractORB(std::shared_ptr<Object> &obj, ORB *extractor) { return extractor->Extract(obj->img, obj->kps, obj->desps); }
 
+void KL_Track(ObjectRef obj1, ObjectRef obj2) {
+    // cv::Mat res, err;
+    std::vector<cv::KeyPoint> kps;
+    std::vector<cv::KeyPoint> next_kps;
+    std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
+    std::vector<uint> kps_idxs;
+    for (const auto &mp : mps) {
+        uint idx = obj1->GetMapPointIdx(mp);
+        kps.push_back(obj1->kps[idx]);
+        kps_idxs.push_back(idx);
+    }
+    std::vector<uchar> res;
+    std::vector<float> err;
+
+    cv::calcOpticalFlowPyrLK(obj1->img, obj2->img, kps, next_kps, res, err);
+
+    for (uint i = 0, sz = res.size(); i < sz; i++) {
+        if (res[i] > 0 && err[i] < 1) {
+            obj2->AddMapPoint(mps[i], obj2->kps.size());
+            obj2->kps.push_back(kps[i]);
+        }
+    }
+}
+
 Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right, BaseCamera *cam_wide,
-             uint _id)
+             uint _id, const std::vector<FrameRef> &optical_flow_frams)
     : id(_id), time_stamp(time_stamp) {
     LEFT = std::make_shared<Object>(cam_left, imgleft, &extractor_left, CAM_NAME::L);
     RIGHT = std::make_shared<Object>(cam_left, imgright, &extractor_right, CAM_NAME::R);
     WIDE = std::make_shared<Object>(cam_wide, imgwide, &extractor_wide, CAM_NAME::W);
+
+    {
+        // KL Track
+        MyTimer::Timer _("KL Track");
+    }
 
     {
         MyTimer::Timer _("ORB_EXTRACT");
