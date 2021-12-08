@@ -47,7 +47,7 @@ class Map {
     std::vector<cv::Mat> GetAllMappointsForShow(CAM_NAME cam_name);
     std::vector<cv::Mat> GetAllKeyFrameForShow();
     std::vector<bool> GetAllKeyFrameMaskForShow();
-
+    std::vector<std::pair<cv::Mat, cv::Mat>> GetEssentialGraph();
     int MapPointSize();
     int KeyFrameSize();
 

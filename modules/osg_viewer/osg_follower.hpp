@@ -1,6 +1,9 @@
+#include <osg/Matrix>
 #include <osg/Matrixd>
 #include <osg/Vec3>
 #include <osg/ref_ptr>
+#include <osgGA/EventHandler>
+#include <stdexcept>
 #ifndef EVENT_HANDLE_H_
 #define EVENT_HANDLE_H_ 1
 #pragma once
@@ -16,68 +19,89 @@
 #include <osg/Node>
 #include <osg/Point>
 #include <osgGA/CameraManipulator>
+#include <osgGA/TrackballManipulator>
 #include <osgUtil/IntersectionVisitor>
 #include <osgViewer/Viewer>
+#include <unordered_map>
 #include <vector>
 
+#include "pyp/fmt/fmt.hpp"
 #define POSITION_DISTORTRANGE 0.005
 #define ROTATION_DISTORTRANGE (osg::PI / 3600)
-
-class Follow : public osgGA::CameraManipulator {
+class Follower : public osgGA::TrackballManipulator {
    public:
-    Follow(std::shared_ptr<osg::Matrixd> cam_pose) {
-        Tcw = cam_pose;
-        tf = osg::Matrixd::translate(0, 0, 30);
-        carPosition = osg::Vec3(0.0, 12.0, 0.0);
+    Follower(const osg::ref_ptr<osgViewer::Viewer>& _viewer, osg::Matrixd _T_layer_w, osg::ref_ptr<osg::MatrixTransform> _node_curr_cam)
+        : viewer(_viewer), node_curr_cam(_node_curr_cam), T_layer_w(_T_layer_w){};
+    ~Follower(){};
+    virtual bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& es);
+
+   protected:
+    osg::ref_ptr<osgViewer::Viewer> viewer;
+    osg::ref_ptr<osg::MatrixTransform> node_curr_cam;
+    osg::Matrixd T_layer_w;
+    osg::Matrixd T_v_c;
+    bool is_follow = false;
+};
+
+inline bool Follower::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& es) {
+    if (ea.getHandled()) return false;
+
+    if (ea.getEventType() == osgGA::GUIEventAdapter::KEYUP) {
+        if (ea.getKey() == 32)  // SPACE
+        {
+            is_follow = !is_follow;
+            std::cout << "isfollow : " << is_follow << std::endl;
+
+            // Calculate transform from Viewer Camera  to current cam
+            osg::Matrixd T_c_w = node_curr_cam->getMatrix() * T_layer_w;
+            T_v_c = this->getMatrix() * osg::Matrixd::inverse(T_c_w);
+            if (is_follow == false) {
+            }
+        }
+        ea.setHandled(true);
+        return true;
     }
-    virtual void setByMatrix(const osg::Matrixd &matrix) {}
+    if (is_follow && ea.getEventType() == osgGA::GUIEventAdapter::FRAME) {
+        osg::Matrixd T_c_w = node_curr_cam->getMatrix() * T_layer_w;
 
-    virtual void setByInverseMatrix(const osg::Matrixd &matrix) {}
-
-    virtual osg::Matrixd getMatrix() const { return (*Tcw) * tf; }
-
-    virtual osg::Matrixd getInverseMatrix() const { return osg::Matrixd::inverse(getMatrix()); }
-    float getrand(float range) { return -range + (range * 2) / 10 * (rand() % 10 + 1); }
-
-    osg::MatrixTransform *CreateMT() {
-        osg::ref_ptr<osg::MatrixTransform> mt = new osg::MatrixTransform;
-        mt->setMatrix(osg::Matrix::translate(0.0, 0.0, 0.0));
-        return mt.release();
+        this->setByMatrix(osg::Matrixd::translate(osg::Vec3(0, 0, 50) * node_curr_cam->getMatrix() * T_layer_w));
+        // ea.setHandled(true);
     }
+    return osgGA::TrackballManipulator::handle(ea, es);
+}
 
-    bool handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapter &us) {
-        switch (ea.getEventType()) {
-            case osgGA::GUIEventAdapter::KEYDOWN:
-                std::cout << ea.getKey() << std::endl;
-                if (ea.getKey() == 'a')  // a
-                {
-                    (*Tcw) *= osg::Matrixd::translate(-1, 0, 0);
-                } else if (ea.getKey() == 'w')  // w
-                {
-                    (*Tcw) *= osg::Matrixd::translate(0, 1, 0);
-                } else if (ea.getKey() == 'd') {  // d
-                    (*Tcw) *= osg::Matrixd::translate(1, 0, 0);
-                } else if (ea.getKey() == 's') {  // s
-                    (*Tcw) *= osg::Matrixd::translate(0, -1, 0);
-                }
-                break;
-            case osgGA::GUIEventAdapter::KEYUP:
-                break;
-
-            case osgGA::GUIEventAdapter::FRAME:
-                break;
+class KeyBoardBoolTriger : public osgGA::GUIEventHandler {
+   public:
+    KeyBoardBoolTriger(){};
+    virtual ~KeyBoardBoolTriger(){};
+    virtual bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa) {
+        if (ea.getEventType() == osgGA::GUIEventAdapter::KEYUP) {
+            const char c = ea.getKey();
+            if (short_cuts.count(c) != 0) {
+                const std::string _name = short_cuts[c];
+                values[_name] = !values[_name];
+                auto func = callbacks[c];
+                func(values[_name]);
+                return true;
+            }
         }
         return false;
     }
+    void Add(const std::string name, const char c, bool default_val, const std::function<void(bool)>& call_back) {
+        values[name] = default_val;
+
+        if (short_cuts.count(c) == 0) {
+            short_cuts[c] = name;
+            callbacks[c] = call_back;
+        } else {
+            throw std::runtime_error(fmt::format("Can not regist [{}] to [{}], Because it has been regiest to [{}] ", c, name, short_cuts[c]));
+        }
+    }
+    bool operator[](const std::string& name) { return values[name]; }
 
    private:
-    osg::Vec3 m_vPosition;
-    std::shared_ptr<osg::Matrixd> Tcw;
-    float m_fMoveSpeed;
-    float m_ori_Speed;
-    osg::Vec3 carPosition;
-    osg::ref_ptr<osg::MatrixTransform> mt;
-    osg::Matrixd tf;
+    std::unordered_map<std::string, bool> values;
+    std::unordered_map<char, std::function<void(bool)>> callbacks;
+    std::unordered_map<char, std::string> short_cuts;
 };
-
 #endif

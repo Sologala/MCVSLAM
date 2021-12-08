@@ -27,7 +27,8 @@ Currently, I am mainly use it to build a convinent platform for accomplish my th
 - [X] Visual Odemetry
 - [X] Local Mapping with Essential Graph
 - [ ] LoopClosing with Dbow 
-- [ ] Visualization of Essentialgraph
+- [X] Visualization of Essentialgraph
+- [X] [osg_viewer interaction specification](modules/osg_viewer/README.md)
 - [ ] Quantifiation of Reprojection Error with Scene Model,  Calculated by 
 - [ ] Build instruction (`If someone is intrested on this prototype`)
 
@@ -79,6 +80,7 @@ Currently, I am mainly use it to build a convinent platform for accomplish my th
 
 
 ![](./.readme/demo.gif)
+
 ![](./.readme/align_result.png)
 ![](./.readme/osg_model_visulization.png)
 

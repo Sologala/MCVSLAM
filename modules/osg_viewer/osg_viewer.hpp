@@ -19,6 +19,8 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+
+#include "osg_follower.hpp"
 #pragma once
 
 class CameraDataBase {
@@ -42,6 +44,8 @@ class osg_viewer {
     void Draw(const cv::Mat mps, uint r, uint g, uint b);
     void Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b);
     void DrawCam(const cv::Mat Tcw, bool ned_shape, uint r, uint g, uint b);
+    void DrawEssentialGraph(const std::vector<std::pair<cv::Mat, cv::Mat>>& graph, uint r = 90, uint g = 90, uint b = 150);
+
     void Commit();
     osg::Matrixd ShowTracjtory(const std::string& tracj_file, osg::Vec4 color);
 
@@ -63,6 +67,8 @@ class osg_viewer {
     int mappoint_size;
     int keyframe_size;
     bool is_show_model = false;
+
+    bool gate_draw_essential_graph = true;
 
     cv::Rect wnd_rect;
 
@@ -91,5 +97,8 @@ class osg_viewer {
 
     // thread
     std::shared_ptr<std::thread> pthread;
+
+    // GUI shortcurt  handle
+    KeyBoardBoolTriger kbtriger;
 };
 #endif

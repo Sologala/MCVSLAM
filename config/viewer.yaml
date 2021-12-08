@@ -1,6 +1,6 @@
 model_path: /home/wen/Desktop/Production_1/Data/root.osgb
-mappoint_size: 5.
-camera_width: 1
+mappoint_size: 4.
+camera_width: 10
 is_show_model: true
 window_x: 0
 window_y: 0

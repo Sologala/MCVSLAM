@@ -7,6 +7,7 @@
 #include <boost/thread/lock_types.hpp>
 #include <boost/thread/pthread/mutex.hpp>
 #include <memory>
+#include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/core/matx.hpp>
 #include <opencv2/core/types.hpp>
@@ -71,7 +72,7 @@ osg::ref_ptr<osg::Geode> CameraDataBase::CreateCamera(uint r, uint g, uint b, ui
         osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
         pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
         if (width != 0) {
-            float w = width;
+            float w = width * 1.f / 10.;
             const float h = w * 0.75;
             const float z = -w * 0.6;
             v->push_back(osg::Vec3(0, 0, 0));
@@ -109,14 +110,14 @@ osg::ref_ptr<osg::Geode> CameraDataBase::CreateCamera(uint r, uint g, uint b, ui
         } else {
             v->push_back(osg::Vec3(0, 0, 0));
             for (int i = 0, sz = v->size(); i < sz; ++i) {
-                c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
+                c->push_back(osg::Vec4(1.0f, 0, 0, 225));  //坐标原点为红色
             }
-            geom->setColorArray(c.get());
+            geom->setVertexArray(v);
+            geom->setColorArray(c);
             geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-            //绘制 camera
-            geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));
+            geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));  // X
             geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-            geode->getOrCreateStateSet()->setAttribute(new osg::Point(4), osg::StateAttribute::ON);
+            geode->getOrCreateStateSet()->setAttribute(new osg::Point(6), osg::StateAttribute::ON);
             geode->addDrawable(pShapeDrawable.get());
             geode->addDrawable(geom.get());
         }
@@ -309,7 +310,7 @@ void osg_viewer::SetCurrentCamera(const cv::Mat Tcw) {
 }
 
 void osg_viewer::DrawCam(const cv::Mat Tcw, bool ned_shape, uint r, uint g, uint b) {
-    osg::ref_ptr<osg::Geode> geode = CameraDataBase::CreateCamera(r, g, b, (ned_shape ? camera_width : 0));
+    osg::ref_ptr<osg::Geode> geode = CameraDataBase::CreateCamera(r, g, b, (ned_shape ? camera_width : 1));
     osg::ref_ptr<osg::MatrixTransform> trans = new osg::MatrixTransform();
     trans->addChild(geode);
     cv::Mat Tcw_lhs = right2left(Tcw);
@@ -320,6 +321,35 @@ void osg_viewer::DrawCam(const cv::Mat Tcw, bool ned_shape, uint r, uint g, uint
     draw_buffer[draw_idx]->addChild(trans);
 }
 
+void osg_viewer::DrawEssentialGraph(const std::vector<std::pair<cv::Mat, cv::Mat>> &graph, uint r, uint g, uint b) {
+    if (gate_draw_essential_graph == false) return;
+    osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
+    osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
+    pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
+    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
+    geode->addDrawable(pShapeDrawable.get());
+    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(2.), osg::StateAttribute::ON);
+    for (const std::pair<cv::Mat, cv::Mat> &e : graph) {
+        osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
+        osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
+        osg::ref_ptr<osg::Vec4dArray> colors = new osg::Vec4dArray();
+        auto ptr_cam0 = e.first.ptr<float>(0);
+        auto ptr_cam1 = e.second.ptr<float>(0);
+        v->push_back(osg::Vec3(*ptr_cam0, -*(ptr_cam0 + 1), -*(ptr_cam0 + 2)));
+        v->push_back(osg::Vec3(*ptr_cam1, -*(ptr_cam1 + 1), -*(ptr_cam1 + 2)));
+        // fmt::print("{} {} {}\n", *ptr, *(ptr + 1), *(ptr + 2));
+        colors->push_back(osg::Vec4(1., r, g, b));
+        colors->push_back(osg::Vec4(1., r, g, b));
+        geom->setVertexArray(v);
+        geom->setColorArray(colors);
+        geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+        geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, v->size()));
+        geode->addDrawable(geom.get());
+    }
+    draw_buffer[draw_idx]->addChild(geode);
+}
+
 void osg_viewer::SetCurViewFollow(const cv::Mat Tcw) {
     cv::Mat Tcw_lhs = right2left(Tcw);
     cv::Mat t = Tcw_lhs.rowRange(0, 3).col(3);
@@ -328,6 +358,7 @@ void osg_viewer::SetCurViewFollow(const cv::Mat Tcw) {
     // osg::Matrixd mat(Tcw_t.ptr<float>());
     osg::Matrixd mat;
     mat.makeTranslate(osg::Vec3d(t.at<float>(0), t.at<float>(1), t.at<float>(2)));
+
     viewer->getCameraManipulator()->setByMatrix(tf * follow_tf * mat);
 }
 
@@ -469,11 +500,37 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     // viewer->setCameraManipulator(nullptr);
     viewer->setSceneData(scene);
     viewer->realize();
-    std::shared_ptr<osg::Matrixd> cam_pose = make_shared<osg::Matrixd>();
-    osg::ref_ptr<Follow> follower = new Follow(cam_pose);
-
+    // viewer->setCameraManipulator(new osgGA::TrackballManipulator());
+    osg::ref_ptr<Follower> follower = new Follower(viewer, layer_curr_cam->getMatrix(), node_curr_cam);
+    viewer->setCameraManipulator(follower);
     // viewer->setCameraManipulator(follower);
-    viewer->setCameraManipulator(new osgGA::TrackballManipulator());
+
+    // add keyboard handle
+    kbtriger.Add("show_essential_graph", 'e', true, [&](bool _val) { gate_draw_essential_graph = _val; });
+    kbtriger.Add("show_ground_truth", 'g', true, [&](bool _val) {
+        if (_val) {
+            if (scene->getNumChildren() == this->scene->getChildIndex(this->ground_trugh_traj)) {
+                this->scene->addChild(this->ground_trugh_traj);
+            }
+        } else {
+            if (scene->getNumChildren() != this->scene->getChildIndex(this->ground_trugh_traj)) {
+                this->scene->removeChild(this->ground_trugh_traj);
+            }
+        }
+    });
+    kbtriger.Add("show_map", 'm', true, [&](bool _val) {
+        if (_val) {
+            if (scene->getNumChildren() == this->scene->getChildIndex(this->layer_environment)) {
+                this->scene->addChild(this->layer_environment);
+            }
+        } else {
+            if (scene->getNumChildren() != this->scene->getChildIndex(this->layer_environment)) {
+                this->scene->removeChild(this->layer_environment);
+            }
+        }
+    });
+
+    viewer->addEventHandler(&kbtriger);
 }
 
 osg_viewer::~osg_viewer() { pthread->join(); }

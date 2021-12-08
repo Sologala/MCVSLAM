@@ -420,6 +420,19 @@ std::vector<bool> Map::GetAllKeyFrameMaskForShow() {
     }
     return ret;
 }
+std::vector<std::pair<cv::Mat, cv::Mat>> Map::GetEssentialGraph() {
+    READLOCK lock(mtx_connection);
+    std::vector<std::pair<cv::Mat, cv::Mat>> ret;
+    std::unordered_set<uint> see_edges;
+    for (const std::pair<KeyFrame const, std::unordered_set<KeyFrame>>& p : essential_gragh) {
+        for (const KeyFrame& kf : p.second) {
+            if (see_edges.count(kf->id)) continue;
+            ret.push_back({p.first->LEFT->GetCameraCenter(), kf->LEFT->GetCameraCenter()});
+        }
+        see_edges.insert(p.first->id);
+    }
+    return ret;
+}
 std::vector<cv::Mat> Map::GetAllMappointsForShow(CAM_NAME cam_name) {
     std::vector<cv::Mat> ret;
 
