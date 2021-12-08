@@ -79,8 +79,8 @@ Track_State Tracker::Track(FrameRef cur_frame) {
 
                 auto lkfmps = GetLastKeyFrame()->LEFT->GetMapPoints();
                 auto lkfmps_wide = GetLastKeyFrame()->WIDE->GetMapPoints();
-                uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(lkfmps, 10);
-                uint pcntw = cur_frame->WIDE->ProjectBunchMapPoints(lkfmps_wide, 40);
+                uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(lkfmps, 7);
+                uint pcntw = cur_frame->WIDE->ProjectBunchMapPoints(lkfmps_wide, 7);
                 int cnt = PoseEstimation::PoseOptimization(cur_frame);
                 _.tock();
                 auto k = getchar();
@@ -167,6 +167,7 @@ Track_State Tracker::Track(FrameRef cur_frame) {
     viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
     viewer->DrawPredictTracjectories(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
     viewer->SetCurrentCamera(cur_frame->GetPose());
+    viewer->DrawEssentialGraph(map->GetEssentialGraph());
     viewer->Commit();
 
     fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
