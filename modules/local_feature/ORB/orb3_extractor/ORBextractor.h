@@ -20,23 +20,25 @@
 #define ORBEXTRACTOR_H
 
 #include <list>
+#include <memory>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 #include <opencv2/opencv.hpp>
 #include <vector>
 
 namespace ORB_SLAM3 {
-
+class ExtractorNode;
+using ExtractorNodeRef = std::shared_ptr<ExtractorNode>;
 class ExtractorNode {
    public:
-    ExtractorNode() : bNoMore(false) {}
+    ExtractorNode() {}
 
-    void DivideNode(ExtractorNode &n1, ExtractorNode &n2, ExtractorNode &n3, ExtractorNode &n4);
+    std::vector<ExtractorNodeRef> &DivideNode();
+    int size() { return vKeys.size(); }
 
     std::vector<cv::KeyPoint> vKeys;
     cv::Point2i UL, UR, BL, BR;
-    std::list<ExtractorNode>::iterator lit;
-    bool bNoMore;
+    std::vector<ExtractorNodeRef> sons;
 };
 
 class ORBextractor {
@@ -68,12 +70,12 @@ class ORBextractor {
     std::vector<float> inline GetInverseScaleSigmaSquares() { return mvInvLevelSigma2; }
 
     std::vector<cv::Mat> mvImagePyramid;
+    static std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint> &vToDistributeKeys, const int &minX, const int &maxX,
+                                                       const int &minY, const int &maxY, const int &nFeatures, const int &level);
 
    protected:
     void ComputePyramid(cv::Mat image);
     void ComputeKeyPointsOctTree(std::vector<std::vector<cv::KeyPoint> > &allKeypoints);
-    std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint> &vToDistributeKeys, const int &minX, const int &maxX, const int &minY,
-                                                const int &maxY, const int &nFeatures, const int &level);
 
     void ComputeKeyPointsOld(std::vector<std::vector<cv::KeyPoint> > &allKeypoints);
 
