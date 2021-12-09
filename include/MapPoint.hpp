@@ -37,7 +37,7 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     const std::unordered_set<KeyFrame> GetAllKeyFrame();
     const Observation GetAllObservation();
     const uint GetObservationCnt();
-
+    void UpdateConnection();
     // normal adn median depth
     cv::Mat GetNormalVector();
     void UpdateNormalVector();

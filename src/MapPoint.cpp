@@ -1,6 +1,8 @@
 #include "MapPoint.hpp"
 
+#include <memory>
 #include <opencv2/core/mat.hpp>
+#include <osgDB/ReadFile>
 
 #include "Frame.hpp"
 #include "Object.hpp"
@@ -34,8 +36,10 @@ const cv::Mat MapPoint::GetDesp() {
 }
 
 void MapPoint::BindKeyFrame(KeyFrame kf, ObjectRef obj) {
-    WRITELOCK _lock(mtx_feature);
-    relative_kfs[kf].insert(obj);
+    {
+        WRITELOCK _lock(mtx_feature);
+        relative_kfs[kf].insert(obj);
+    }
 }
 
 void MapPoint::UnBindKeyFrame(KeyFrame kf, ObjectRef obj) {
@@ -58,13 +62,31 @@ const std::unordered_set<KeyFrame> MapPoint::GetAllKeyFrame() {
 }
 
 const Observation MapPoint::GetAllObservation() {
-    READLOCK _lock(mtx_feature);
+    // ned to check if this observation is still exist
+    UpdateConnection();
+    READLOCK lock(mtx_feature);
     return relative_kfs;
 }
 
 const uint MapPoint::GetObservationCnt() {
+    // UpdateConnection();
     READLOCK _lock(mtx_feature);
     return relative_kfs.size();
+}
+
+void MapPoint::UpdateConnection() {
+    std::vector<std::pair<KeyFrame, ObjectRef>> ned_del;
+    {
+        READLOCK _lock(mtx_feature);
+        for (const auto &p : relative_kfs) {
+            for (const auto &obj : p.second) {
+                if (obj->count(shared_from_this()) == false) ned_del.push_back({p.first, obj});
+            }
+        }
+    }
+    for (const auto p : ned_del) {
+        UnBindKeyFrame(p.first, p.second);
+    }
 }
 
 cv::Mat MapPoint::GetNormalVector() {
@@ -83,7 +105,7 @@ void MapPoint::ComputeDistinctiveDescriptors() {
         KeyFrame kf = p.first;
         // Replace measurement in keyframe
         for (const auto &obj : p.second) {
-            size_t idx = obj->GetMapPointIdx(this->shared_from_this());
+            uint idx = obj->GetMapPointIdx(shared_from_this());
             all_ob_desps.push_back(obj->desps.row(idx));
         }
     }
