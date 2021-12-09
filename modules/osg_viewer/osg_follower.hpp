@@ -40,7 +40,7 @@ class Follower : public osgGA::TrackballManipulator {
     osg::ref_ptr<osg::MatrixTransform> node_curr_cam;
     osg::Matrixd T_layer_w;
     osg::Matrixd T_v_c;
-    bool is_follow = false;
+    bool is_follow = true;
 };
 
 inline bool Follower::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& es) {
