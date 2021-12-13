@@ -77,12 +77,6 @@ Capture::Capture(const std::string &_fileName) : file_name(_fileName) {
         sort(img_paths.begin(), img_paths.end());
     }
 
-    if (int(timeStamp) % len == 0 && mode == Work_Mode::VIDEO_FILE) {
-        cap->release();
-        cap->open(file_name);
-    } else if (int(timeStamp) % len == 0 && mode == Work_Mode::PATH) {
-        img_path_idx = 0;
-    }
     Init();
 }
 void Capture::Init() {
