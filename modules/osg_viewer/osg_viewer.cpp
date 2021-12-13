@@ -14,6 +14,7 @@
 #include <opencv2/opencv.hpp>
 #include <osg/Camera>
 #include <osg/CameraView>
+#include <osg/ComputeBoundsVisitor>
 #include <osg/CopyOp>
 #include <osg/Depth>
 #include <osg/Geode>
@@ -31,6 +32,7 @@
 #include <osg/Node>
 #include <osg/NodeVisitor>
 #include <osg/Point>
+#include <osg/PolygonMode>
 #include <osg/Quat>
 #include <osg/ShapeDrawable>
 #include <osg/Transform>
@@ -51,6 +53,7 @@
 
 using namespace std;
 std::unordered_map<CameraDataBase::CameraDespcriptor, osg::ref_ptr<osg::Geode>> CameraDataBase::database;
+
 osg::ref_ptr<osg::Geode> CameraDataBase::CreateCamera(uint r, uint g, uint b, uint width) {
     CameraDespcriptor desp = 0;
     desp <<= 8;
@@ -94,10 +97,12 @@ osg::ref_ptr<osg::Geode> CameraDataBase::CreateCamera(uint r, uint g, uint b, ui
             v->push_back(osg::Vec3(-w, -h, z));
             v->push_back(osg::Vec3(w, -h, z));
             geom->setVertexArray(v.get());
+
             //为每个顶点指定一种颜色
             for (int i = 0, sz = v->size(); i < sz; ++i) {
                 c->push_back(osg::Vec4(1.0f, r, g, b));  //坐标原点为红色
             }
+
             //如果没指定颜色则会变为黑色
             geom->setColorArray(c.get());
             geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
@@ -107,6 +112,29 @@ osg::ref_ptr<osg::Geode> CameraDataBase::CreateCamera(uint r, uint g, uint b, ui
             geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(5.), osg::StateAttribute::ON);
             geode->addDrawable(pShapeDrawable.get());
             geode->addDrawable(geom.get());
+
+            // 创建 包围盒
+            {
+                osg::ComputeBoundsVisitor boundVisitor;
+                geom->accept(boundVisitor);
+                osg::BoundingBox boundingBox = boundVisitor.getBoundingBox();
+
+                float length = boundingBox.xMax() - boundingBox.xMin();
+                float width = boundingBox.yMax() - boundingBox.yMin();
+                float height = boundingBox.zMax() - boundingBox.zMin();
+                osg::ref_ptr<osg::ShapeDrawable> drawable = new osg::ShapeDrawable(new osg::Box(boundingBox.center(), length, width, height));
+                drawable->setColor(osg::Vec4(0.1, 1.0, 0.0, 0.0));
+                osg::ref_ptr<osg::StateSet> stateset = new osg::StateSet;
+                stateset = drawable->getOrCreateStateSet();
+                osg::ref_ptr<osg::PolygonMode> polygonMode = new osg::PolygonMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::LINE);
+                stateset->setAttributeAndModes(polygonMode);
+                stateset->setMode(GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+                stateset->setMode(GL_BLEND, osg::StateAttribute::ON);
+                stateset->setMode(GL_DEPTH, osg::StateAttribute::OFF);
+                stateset->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+                geode->addDrawable(drawable);
+            }
+            geode->setNodeMask(1);
         } else {
             v->push_back(osg::Vec3(0, 0, 0));
             for (int i = 0, sz = v->size(); i < sz; ++i) {
@@ -139,7 +167,8 @@ cv::Mat SE3Inverse(const cv::Mat T) {
 
 /* */
 cv::Mat right2left(cv::Mat T) {
-    static cv::Mat r2l = (cv::Mat_<float>(4, 4) << -1, 0, 0, 0, /* */ 0, 01, 0, 0, /* */ 0, 0, 1, 0, /* */ 0, 0, 0, 1);
+    static cv::Mat r2l = (cv::Mat_<float>(4, 4) << -1, 0, 0, 0, /* */ 0, 01, 0, 0,
+                          /* */ 0, 0, 1, 0, /* */ 0, 0, 0, 1);
     return r2l * T;
 }
 void osg_viewer::Run() {
@@ -491,7 +520,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     // create current cam
     layer_curr_cam->addChild(node_curr_cam);
     layer_curr_cam->setMatrix(tf);
-    node_curr_cam->addChild(CameraDataBase::CreateCamera(0, 225, 0, camera_width));
+    node_curr_cam->addChild(CameraDataBase::CreateCamera(255, 255, 0, camera_width));
     // create points and cams
     scene->addChild(points_cams_align);
     scene->addChild(layer_curr_cam);
