@@ -44,7 +44,7 @@ void track(std::vector<cv::Mat> &imgs, double time_stamp) {
     for (int i = 0, sz = imgs.size(); i < sz; i++) {
         cv::cvtColor(imgs[i], imggrays[i], cv::COLOR_BGR2GRAY);
     }
-    FrameRef cur_frame = _map.CreateFrame(imggrays[0], imggrays[1], imggrays[2], time_stamp, &cam_left, &cam_left, &cam_wide);
+    FrameRef cur_frame = _map.CreateFrame(imggrays[0], imggrays[1], imggrays[2], time_stamp, &cam_left, &cam_left, &cam_wide, {});
     MCVSLAM::Track_State state = tracker.Track(cur_frame);
 }
 
