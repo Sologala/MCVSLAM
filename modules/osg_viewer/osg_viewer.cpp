@@ -226,7 +226,7 @@ void osg_viewer::Draw(const cv::Mat mps, uint r, uint g, uint b) {
 
 void osg_viewer::Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b) {
     // create vertex array and colors
-    fmt::print("draw {} points\n", mps.size());
+    // fmt::print("draw {} points\n", mps.size());
     osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
     osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
     pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
@@ -323,7 +323,7 @@ void osg_viewer::RequestStop() {
 }
 
 void osg_viewer::DrawPredictTracjectories(const std::vector<cv::Mat> &Tcws, const std::vector<bool> &mask, uint r, uint g, uint b) {
-    fmt::print("draw {} keyframes \n", Tcws.size());
+    // fmt::print("draw {} keyframes \n", Tcws.size());
     for (uint i = 0, sz = Tcws.size(); i < sz; i++) {
         DrawCam(Tcws[i], mask[i], r, g, b);
     }
