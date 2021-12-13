@@ -181,11 +181,10 @@ Track_State Tracker::Track(FrameRef cur_frame) {
     viewer->DrawEssentialGraph(map->GetEssentialGraph());
     viewer->Commit();
 
-    //   fmt::print("{:^20}{:^20}{:^20}\n", "item", "time(ms)", "fps");
-    //   for (auto p : MyTimer::Timer::COUNT) {
-    //     fmt::print("{:^20}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(),
-    //                p.second.fps());
-    //   }
+    fmt::print("{:^40}{:^20}{:^20}\n", "item", "time(ms)", "fps");
+    for (auto p : MyTimer::Timer::COUNT) {
+        fmt::print("{:^40}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(), p.second.fps());
+    }
     // char _ = getchar();
     return Track_State::OK;
 }

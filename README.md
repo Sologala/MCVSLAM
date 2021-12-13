@@ -29,8 +29,9 @@ Currently, I am mainly use it to build a convinent platform for accomplish my th
 - [ ] LoopClosing with Dbow 
 - [X] Visualization of Essentialgraph
 - [X] [osg_viewer interaction specification](modules/osg_viewer/README.md)
-- [ ] Quantifiation of Reprojection Error with Scene Model,  Calculated by 
+- [ ] Quantification of Reprojection Error with Scene Model,  Calculated by 
 - [ ] Build instruction (`If someone is intrested on this prototype`)
+- [ ] Quantification of ATE or RTE.
 
     $$ e = ||z_{messured} - z_{buffer_from osg} ||_2^2$$
 
@@ -63,17 +64,20 @@ Currently, I am mainly use it to build a convinent platform for accomplish my th
 
 # Time Performance
 
-2000 ORB feature points in each image
+2000 ORB feature points in each image, running on i7-9700 with single thread.
 
-| Item               | ms        | fps        | Notes                   |
-| ------------------ | --------- | ---------- | ----------------------- |
-| ORB_EXTRACT        | 5.661095  | 176.641137 | 3 thread                |
-| Stereo Matching    | 26.477234 | 37.768153  |                         |
-| Track Local Map    | 17.467155 | 57.249981  | (Project & grid search) |
-| Track LastKeyFrame | 15.152356 | 65.995901  | (Bow match)             |
-|                    |           |            |                         |
-|                    |           |            |                         |
-|                    |           |            |                         |
+```shell
+        item              time(ms)              fps         
+      Local BA           169.727319           5.891800      
+ Track MotionModel        6.184962           161.679858     
+  Track Local Map        26.733954           37.405476      
+    ORB_EXTRACT           6.437734           155.331754     
+  Stereo Matching        23.619861           42.337073      
+Frame Triangulation      34.983119           28.585134      
+Local kf UpdateConnection      5.755037           173.757820     
+    Local Fuse           22.248238           44.947178      
+ Track LastKeyFrame      16.244335           61.559545  
+```
 
 
 
@@ -83,7 +87,5 @@ Currently, I am mainly use it to build a convinent platform for accomplish my th
 
 ![](./.readme/align_result.png)
 ![](./.readme/osg_model_visulization.png)
-
-
 
 
