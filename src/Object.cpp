@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <opencv2/core.hpp>
 #include <opencv2/core/types.hpp>
+#include <stdexcept>
 #include <type_traits>
 #include <unordered_set>
 
@@ -26,44 +27,46 @@ Object::Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, ORB *_extractor, CAM_NAM
     grid_width_inv = static_cast<double>(FRAME_GRID_ROWS) / img.rows;
 }
 
-void Object::SetPose(cv::Mat Tcw) {
+inline void Object::SetPose(cv::Mat Tcw) {
     WRITELOCK lock(mtx_pose);
     // std::unique_lock<std::mutex> lock(mtxPose);
     mTcw = Tcw.clone();
     UpdatePoseMatrix();
 }
 
-cv::Mat Object::GetPose() {
+inline cv::Mat Object::GetPose() {
     READLOCK lock(mtx_pose);
     // std::unique_lock<std::mutex> lock(mtxPose);
     return mTcw.clone();
 }
 
-cv::Mat Object::GetPoseInverse() {
+inline cv::Mat Object::GetPoseInverse() {
     READLOCK lock(mtx_pose);
     // std::unique_lock<std::mutex> lock(mtxPose);
     return mTwc.clone();
 }
 
-cv::Mat Object::GetCameraCenter() {
+inline cv::Mat Object::GetCameraCenter() {
     READLOCK lock(mtx_pose);
     // std::unique_lock<std::mutex> lock(mtxPose);
     return mOw.clone();
 }
 
-cv::Mat Object::GetRotation() {
+inline cv::Mat Object::GetRotation() {
     READLOCK lock(mtx_pose);
     // std::unique_lock<std::mutex> lock(mtxPose);
     return mRcw.clone();
 }
 
-cv::Mat Object::GetTranslation() {
+inline cv::Mat Object::GetTranslation() {
     READLOCK lock(mtx_pose);
     // std::unique_lock<std::mutex> lock(mtxPose);
     return mtcw.clone();
 }
 
-std::vector<MapPointRef> Object::GetMapPointsVector() {
+inline cv::Mat Object::Map(const cv::Mat &x3D) {}
+
+inline std::vector<MapPointRef> Object::GetMapPointsVector() {
     std::vector<MapPointRef> ret;
     {
         READLOCK lock(mtx_mps);
@@ -72,11 +75,11 @@ std::vector<MapPointRef> Object::GetMapPointsVector() {
     return ret;
 }
 
-std::unordered_set<MapPointRef> Object::GetMapPoints() {
+inline std::unordered_set<MapPointRef> Object::GetMapPoints() {
     READLOCK lock(mtx_mps);
     return all_mps;
 }
-std::unordered_set<MapPointRef> Object::GetMapPoints(uint th_obs) {
+inline std::unordered_set<MapPointRef> Object::GetMapPoints(uint th_obs) {
     READLOCK lock(mtx_mps);
     std::unordered_set<MapPointRef> ret;
     for (auto &mp : all_mps) {
@@ -85,21 +88,30 @@ std::unordered_set<MapPointRef> Object::GetMapPoints(uint th_obs) {
     return ret;
 }
 
-void Object::clear() {
+inline std::unordered_set<uint> Object::GetAllMapPointsIdxs() {
+    READLOCK lock(mtx_mps);
+    std::unordered_set<uint> ret;
+    for (const auto &p : mIDX2MP) {
+        ret.insert(p.first);
+    }
+    return ret;
+}
+
+inline void Object::clear() {
     WRITELOCK lock(mtx_mps);
     mMP2IDX.clear();
     mIDX2MP.clear();
     all_mps.clear();
 }
 
-bool Object::count(MapPointRef pMP) {
+inline bool Object::count(MapPointRef pMP) {
     if (pMP == NULL) return false;
     READLOCK lock(mtx_mps);
     if (mMP2IDX.count(pMP) == 0) return false;
     return true;
 }
 
-bool Object::count(size_t idx) {
+inline bool Object::count(size_t idx) {
     if (idx < 0 || idx >= size()) return false;
     READLOCK lock(mtx_mps);
     if (mIDX2MP.count(idx) == 0) return false;
@@ -109,31 +121,23 @@ bool Object::count(size_t idx) {
 size_t Object::GetMapPointIdx(MapPointRef pMP) {
     if (pMP == NULL) {
         fmt::print("NULL pMP \n");
-        while (1)
-            ;
-        return -1;
+        throw std::runtime_error("NULL pMP");
     }
     READLOCK lock(mtx_mps);
     //	data_check();
     if (mMP2IDX.count(pMP) == 0) {
-        fmt::print("Not exist \n");
-        while (1)
-            ;
-        return -1;
+        cout << all_mps.count(pMP) << endl;
+        throw std::runtime_error("Not exist");
     }
 
     size_t idx = mMP2IDX[pMP];
     if (mIDX2MP.count(idx) == 0 || mIDX2MP[idx] != pMP) {
-        fmt::print("Info not correct \n");
-        while (1)
-            ;
-        return -1;
+        throw std::runtime_error("Info not correct ");
     }
-
     return idx;
 }
 
-MapPointRef Object::GetMapPoint(size_t idx) {
+inline MapPointRef Object::GetMapPoint(size_t idx) {
     READLOCK lock(mtx_mps);
     if (idx >= size() || mIDX2MP.count(idx) == 0) return NULL;
     //	data_check();
@@ -157,10 +161,9 @@ void Object::replaceMapPoint(MapPointRef pMP, MapPointRef pMP1) {
     all_mps.insert(pMP1);
 }
 
-void Object::DelMapPoint(size_t idx) {
+inline void Object::DelMapPoint(size_t idx) {
     if (idx >= size()) return;
     WRITELOCK lock(mtx_mps);
-    // std::unique_lock<std::mutex> lock(mtxMapPoints);
     if (mIDX2MP.count(idx) == 0) return;
     MapPointRef pMP = mIDX2MP[idx];
     if (mIDX2MP.count(idx)) mIDX2MP.erase(idx);
@@ -168,7 +171,7 @@ void Object::DelMapPoint(size_t idx) {
     if (all_mps.count(pMP)) all_mps.erase(pMP);
 }
 
-void Object::DelMapPoint(MapPointRef pMP) {
+inline void Object::DelMapPoint(MapPointRef pMP) {
     if (pMP == NULL) return;
     WRITELOCK lock(mtx_mps);
     if (mMP2IDX.count(pMP) == 0) return;
@@ -178,12 +181,12 @@ void Object::DelMapPoint(MapPointRef pMP) {
     if (all_mps.count(pMP)) all_mps.erase(pMP);
 }
 
-size_t Object::MapPointSize() {
+inline size_t Object::MapPointSize() {
     READLOCK lock(mtx_mps);
     return all_mps.size();
 }
 
-uint Object::Covisibility(const ObjectRef &other) {
+inline uint Object::Covisibility(const ObjectRef &other) {
     READLOCK lock(mtx_mps);
     auto mps1 = other->GetMapPoints();
     uint cnt = 0;
@@ -204,7 +207,7 @@ uint Object::Covisibility(const ObjectRef &other) {
 // #define MAPPOINT_STRATEGY_COMPARE
 #define MAPPOINT_STRATEGY_FORCE
 
-void Object::AddMapPoint(MapPointRef pMP, size_t idx) {
+inline void Object::AddMapPoint(MapPointRef pMP, size_t idx) {
     DelMapPoint(pMP);
     DelMapPoint(idx);
 
@@ -222,9 +225,13 @@ void Object::AddMapPoint(MapPointRef pMP, size_t idx) {
         //         return;
         //     }
         // }
-        mIDX2MP[idx] = pMP;
-        mMP2IDX[pMP] = idx;
-        all_mps.insert(pMP);
+        if (mIDX2MP.count(idx) == 0 || mMP2IDX.count(pMP) == 0 || all_mps.count(pMP) == 0) {
+            mIDX2MP[idx] = pMP;
+            mMP2IDX[pMP] = idx;
+            all_mps.insert(pMP);
+        } else {
+            fmt::print("Error!!!\n");
+        }
     }
 }
 
@@ -294,13 +301,15 @@ uint Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, f
         cv::Point2f pt = this->mpCam->project(Pc);
 
         std::vector<cv::Mat> _desps;
+        std::vector<cv::KeyPoint> _kps;
         float r = r_threshold * extractor->mvScaleFactor[mp->level];
         std::vector<size_t> _ori_idx = GetFeaturesInArea(pt.x, pt.y, r);
         for (size_t idx : _ori_idx) {
             _desps.push_back(desps.row(idx));
+            _kps.emplace_back(kps[idx]);
         }
         if (_desps.size()) {
-            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio(0.6);
+            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio(0.65).FilterThreshold();
             if (res.size()) {
                 AddMapPoint(mp, _ori_idx[res[0].trainIdx]);
                 cnt += 1;
@@ -310,7 +319,7 @@ uint Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, f
     return cnt;
 }
 
-void Object::ComputeBow() {
+inline void Object::ComputeBow() {
     if (is_bowed == false) {
         std::vector<cv::Mat> v_desps;
         for (int i = 0, sz = desps.rows; i < sz; i++) {
@@ -321,7 +330,7 @@ void Object::ComputeBow() {
     }
 }
 
-bool Object::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY) {
+inline bool Object::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY) {
     posX = round((kp.pt.x - bounddingbox.tl().x) * grid_width_inv);
     posY = round((kp.pt.y - bounddingbox.tl().y) * grid_height_inv);
 

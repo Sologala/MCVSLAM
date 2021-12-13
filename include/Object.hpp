@@ -54,6 +54,9 @@ class Object {
     cv::Mat GetRotation();
     cv::Mat GetTranslation();
 
+    cv::Mat Map(const cv::Mat &x3D);
+    cv::point2f Project(const cv::Mat &x3D);
+
     // ------------------------[Map Points]--------------------
     void clear();
 
@@ -63,7 +66,7 @@ class Object {
     std::vector<MapPointRef> GetMapPointsVector();
     std::unordered_set<MapPointRef> GetMapPoints();
     std::unordered_set<MapPointRef> GetMapPoints(uint th_obs);
-
+    std::unordered_set<uint> GetAllMapPointsIdxs();
     size_t GetMapPointIdx(MapPointRef pMP);
 
     MapPointRef GetMapPoint(size_t idx);
