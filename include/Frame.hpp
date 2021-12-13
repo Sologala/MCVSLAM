@@ -15,11 +15,11 @@ class Frame {
     friend class Map;
 
    public:
-    Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right, BaseCamera* cam_wide,
-          uint _id);
+    Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right, BaseCamera *cam_wide,
+          uint _id, const std::vector<FrameRef> &optical_flow_frams);
 
     ~Frame();
-    static int Parse(const std::string& config_file);
+    static int Parse(const std::string &config_file);
 
    public:
     void ComputeStereoMatch(ObjectRef cam1, ObjectRef cam2);
@@ -34,6 +34,7 @@ class Frame {
 
    public:
     ObjectRef LEFT, RIGHT, WIDE;
+    uint kl_left, kl_right, kl_wide;
 
     uint id;
     double time_stamp;

@@ -5,13 +5,17 @@
 #include <memory>
 #include <opencv2/core/types.hpp>
 #include <opencv2/highgui.hpp>
+#include <pyp/timer/timer.hpp>
+#include <stdexcept>
 #include <unordered_set>
 
 #include "BAoptimizer.hpp"
 #include "BaseCamera.hpp"
 #include "Converter.h"
+#include "Filter.hpp"
 #include "Frame.hpp"
 #include "MapPoint.hpp"
+#include "Matcher.hpp"
 #include "Object.hpp"
 #include "Pinhole.hpp"
 #include "PoseEstimation.hpp"
@@ -40,40 +44,175 @@ MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf
     return ref;
 }
 
-FrameRef Map::CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera* cam_left, BaseCamera* cam_right,
-                          BaseCamera* cam_wide, const std::vector<FrameRef>& optical_flow_frams) {
+FrameRef Map::CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
+                          BaseCamera *cam_wide, const std::vector<FrameRef> &optical_flow_frams) {
     cnt_kf += 1;
     return new Frame(imgleft, imgright, imgwide, time_stamp, cam_left, cam_right, cam_wide, frame_id++, optical_flow_frams);
 }
 
 void Map::AddKeyFrame(FrameRef frame) {
+    frame->ComputeBow();
     // recored as keyframe
     all_keyframes.insert(frame);
+
     //  create index from mappoints to this frame ;
     for (auto obj : {frame->LEFT, frame->WIDE})
         for (auto mpr : obj->GetMapPoints()) {
             mpr->BindKeyFrame(frame, obj);
+            mpr->ComputeDistinctiveDescriptors();
+            mpr->UpdateNormalVector();
         }
 
     UpdateConnections(frame);
 
-    frame->ComputeBow();
+    std::unordered_set<uint> already_mp_idxs = frame->LEFT->GetAllMapPointsIdxs();
+
+    // Reproject new mappoints from this frame
+    uint created_cnt = 0;
+    for (uint i = 0, sz = frame->LEFT->size(); i < sz; i++) {
+        float &z = frame->depth_left[i];
+        bool ned_create = false;
+        if (z <= 0) continue;
+        if (already_mp_idxs.count(i)) {
+            // Some strategy to judge whether need a new mappoint.
+            MapPointRef mpr = frame->LEFT->GetMapPoint(i);
+            if (mpr->GetObservationCnt() < 1) {
+                ned_create = true;
+                DelAllMappointObservation(mpr);
+            }
+        } else {
+            ned_create = true;
+        }
+        if (ned_create) {
+            cv::Mat Pc = frame->LEFT->mpCam->unproject_z(frame->LEFT->kps[i].pt, z);
+            cv::Mat Pw = frame->LEFT->GetRotation().t() * Pc + frame->LEFT->GetCameraCenter();
+            MapPointRef new_mp = CreateMappoint(Pw, frame->LEFT->desps.row(i), frame->LEFT->kps[i].octave, frame->id, CAM_NAME::L);
+            new_mp->BindKeyFrame(frame, frame->LEFT);
+            new_mp->ComputeDistinctiveDescriptors();
+            new_mp->UpdateNormalVector();
+            // Check if it is a stereo observation in order to not
+            frame->LEFT->AddMapPoint(new_mp, i);
+            created_cnt += 1;
+        }
+    }
+    fmt::print("LM: reproject create {} mappoints \n", created_cnt);
+
     // grab local map
+
     auto local_kfs = GrabLocalMap_EssGraph(frame, 2);
+
+    // Add some Filter
 
     // create new mappoint
     if (local_kfs.count(frame)) local_kfs.erase(frame);
-    for (auto kf : local_kfs) {
-        uint tri_left = TrangularizationTwoObject(kf->LEFT, frame->LEFT, kf, frame, kf->b, kf->u_right, frame->u_right);
-        uint tri_wide = TrangularizationTwoObject(kf->WIDE, frame->WIDE, kf, frame, kf->b);
-        fmt::print("Triangulized left: {}, wide {} \n", tri_left, tri_wide);
+    {
+        MyTimer::Timer _("Frame Triangulation");
+        for (auto kf : local_kfs) {
+            uint tri_left = TrangularizationTwoObject(kf->LEFT, frame->LEFT, kf, frame, kf->b, kf->u_right, frame->u_right);
+            uint tri_wide = TrangularizationTwoObject(kf->WIDE, frame->WIDE, kf, frame, kf->b);
+            fmt::print("Triangulized left: {}, wide {} \n", tri_left, tri_wide);
+        }
     }
 
+    CullingMapppoints();
+
+    {
+        MyTimer::Timer _("Local kf UpdateConnection");
+        Map::UpdateConnections(frame);
+        for (auto kf : local_kfs) {
+            Map::UpdateConnections(kf);
+        }
+    }
+
+    {
+        MyTimer::Timer _("Local Fuse ");
+        // Find more matches in neighbor keyframes and fuse point duplications
+
+        for (auto kf : local_kfs) {
+            uint cnt_l = Fuse(kf->LEFT, kf, frame->LEFT->GetMapPoints());
+            uint cnt_r = Fuse(kf->WIDE, kf, frame->WIDE->GetMapPoints());
+            fmt::print("fuse left {}  wide {}\n", cnt_l, cnt_r);
+        }
+    }
+
+    // local ba
+    if (frame->id != 0) {
+        // Perform local ba
+        MyTimer::Timer _("Local BA");
+        local_kfs = GrabLocalMap_Mappoint(frame, 1);
+        std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
+        local_kfs.insert(frame);
+        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 20, &PoseEstimation::FilterCallBack_Chi2);
+        fmt::print("[local ba] res {}  kfs {}, fix_kfs {}\n", op_cnt, local_kfs.size(), fix_local_kfs.size());
+        for (const KeyFrame &kf : local_kfs) {
+            Map::UpdateConnections(kf);
+        }
+    }
+
+    //  create index from mappoints to this frame ;
+    for (auto obj : std::vector<ObjectRef>({frame->LEFT, frame->WIDE}))
+        for (auto mpr : obj->GetMapPoints()) {
+            mpr->BindKeyFrame(frame, obj);
+            mpr->ComputeDistinctiveDescriptors();
+            mpr->UpdateNormalVector();
+        }
+
+    // update
+
+    Map::UpdateConnections(frame);
+}
+
+void Map::DelKeyFrame(FrameRef frame) {
+    assert(all_keyframes.count(frame) != 0);
+    all_keyframes.erase(frame);
+    // deleta all relative mappoints;
+    for (auto obj : {frame->LEFT, frame->WIDE, frame->RIGHT})
+        for (MapPointRef mpr : obj->GetMapPoints()) {
+            mpr->UnBindKeyFrame(frame, obj);
+        }
+
+    {
+        WRITELOCK _lock(mtx_connection);
+        // clear all edge in connection graph
+        if (essential_gragh.count(frame)) {
+            for (const KeyFrame &_out_kf : essential_gragh[frame]) {
+                essential_gragh[_out_kf].erase(frame);
+            }
+            essential_gragh.erase(frame);
+        }
+        // break spaning tree connection
+        if (parent_kf.count(frame)) parent_kf.erase(frame);
+    }
+}
+
+void Map::DelAllMappointObservation(MapPointRef mp) {
+    for (auto ob : mp->GetAllObservation()) {
+        KeyFrame kf = ob.first;
+        for (ObjectRef obj : ob.second) {
+            obj->DelMapPoint(mp);
+        }
+    }
+}
+
+void Map::ReplaceMappoint(MapPointRef mp1, MapPointRef mp2) {
+    if (mp1->id == mp2->id) return;
+    for (auto ob : mp1->GetAllObservation()) {
+        KeyFrame kf = ob.first;
+        for (ObjectRef obj : ob.second) {
+            obj->ReplaceMapPoint(mp1, mp2);
+        }
+    }
+    DelAllMappointObservation(mp1);
+    mp1->SetBad();
+    if (all_mappoints.count(mp1)) all_mappoints.erase(mp1);
+}
+
+void Map::CullingMapppoints() {
     // culling mappoint
     for (uint i = 0, sz = recent_created_mps.size(); i < sz; i++) {
         MapPointRef mp = recent_created_mps.front();
         recent_created_mps.pop_front();
-        uint ob_cnt = mp->GetAllObservation().size();
+        uint ob_cnt = mp->GetObservationCnt();
 
         enum Action { DEL, STAY, SAVE };
         Action act;
@@ -99,70 +238,11 @@ void Map::AddKeyFrame(FrameRef frame) {
             all_mappoints.insert(mp);
         }
     }
-
-    Map::UpdateConnections(frame);
-    for (auto kf : local_kfs) {
-        Map::UpdateConnections(kf);
-    }
-
-    // local ba
-    if (frame->id != 0) {
-        // Perform local ba
-        local_kfs = GrabLocalMap_Mappoint(frame, 3);
-        std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
-        local_kfs.insert(frame);
-        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 10, &PoseEstimation::FilterCallBack_Chi2);
-        fmt::print("[local ba] res {}  kfs {}, fix_kfs {}\n", op_cnt, local_kfs.size(), fix_local_kfs.size());
-        for (const KeyFrame& kf : local_kfs) {
-            Map::UpdateConnections(kf);
-        }
-    }
-
-    //  create index from mappoints to this frame ;
-    for (auto obj : std::vector<ObjectRef>({frame->LEFT, frame->WIDE}))
-        for (auto mpr : obj->GetMapPoints()) {
-            mpr->BindKeyFrame(frame, obj);
-        }
-
-    // update
-
-    // UpdataConnections(frame);
-}
-
-void Map::DelKeyFrame(FrameRef frame) {
-    assert(all_keyframes.count(frame) != 0);
-    all_keyframes.erase(frame);
-    // deleta all relative mappoints;
-    for (auto obj : {frame->LEFT, frame->WIDE, frame->RIGHT})
-        for (MapPointRef mpr : obj->GetMapPoints()) {
-            mpr->UnBindKeyFrame(frame, obj);
-        }
-
-    {
-        WRITELOCK _lock(mtx_connection);
-        // clear all edge in connection graph
-        if (essential_gragh.count(frame)) {
-            for (const KeyFrame& _out_kf : essential_gragh[frame]) {
-                essential_gragh[_out_kf].erase(frame);
-            }
-            essential_gragh.erase(frame);
-        }
-        // break spaning tree connection
-        if (parent_kf.count(frame)) parent_kf.erase(frame);
-    }
-}
-
-void Map::DelAllMappointObservation(MapPointRef mp) {
-    for (auto ob : mp->GetAllObservation()) {
-        KeyFrame kf = ob.first;
-        for (ObjectRef obj : ob.second) {
-            obj->DelMapPoint(mp);
-        }
-    }
 }
 
 void Map::Clear() {
-    // 1. Must first free frames due to that The frame will automatically free relative mappoints
+    // 1. Must first free frames due to that The frame will automatically free
+    // relative mappoints
     for (KeyFrame kf : all_keyframes) {
         delete kf;
     }
@@ -178,7 +258,7 @@ void Map::Clear() {
 }
 
 int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1, KeyFrame kf2, float min_baseline,
-                                   const std::vector<float>& uright_obj1, const std::vector<float>& uright_obj2) {
+                                   const std::vector<float> &uright_obj1, const std::vector<float> &uright_obj2) {
     // bow match two frame
 
     float th = 0.5f;
@@ -206,8 +286,10 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
     // median depth in obj2, why use obj2 not obj1 ?
     const float median_depth = obj2->ComputeSceneMedianDepth();
     if (baseline < min_baseline || (obj2->MapPointSize() && baseline / obj2->ComputeSceneMedianDepth() > 3)) {
-        fmt::print("Mapping::Trianglize:: traslation too less or large than baseline [{} < {} || {} > {}] \n", baseline, min_baseline, baseline,
-                   median_depth);
+        fmt::print(
+            "Mapping::Trianglize:: traslation too less or large than "
+            "baseline [{} < {} || {} > {}] \n",
+            baseline, min_baseline, baseline, median_depth);
         return 0;
     }
 
@@ -219,8 +301,8 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
                          .FilterThreshold(64)
                          .FilterOrientation(obj1->kps, obj2->kps)
                          .FilterFMatrix(obj1->kps, obj2->kps, F12, obj2->extractor->mvLevelSigma2);
-    // match_res.Show(fmt::format("trangle  bow match", match_res.size()), obj1, obj2);
-    // cv::waitKey(30);
+    // match_res.Show(fmt::format("trangle  bow match", match_res.size()), obj1,
+    // obj2); cv::waitKey(30);
     if (match_res.size() < 10) {
         return 0;
     }
@@ -243,9 +325,9 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
     int cnt = 0;
     // Triangulate each match
-    for (const cv::DMatch& m : match_res) {
-        const cv::KeyPoint& kp1 = obj1->kps[m.queryIdx];
-        const cv::KeyPoint& kp2 = obj2->kps[m.trainIdx];
+    for (const cv::DMatch &m : match_res) {
+        const cv::KeyPoint &kp1 = obj1->kps[m.queryIdx];
+        const cv::KeyPoint &kp2 = obj2->kps[m.trainIdx];
 
         float kp1_ur = obj1->name == CAM_NAME::L ? uright_obj1[m.queryIdx] : -1;
         float kp2_ur = obj2->name == CAM_NAME::L ? uright_obj2[m.trainIdx] : -1;
@@ -313,7 +395,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         // Check reprojection error in first keyframe
         // Check reprojection error in first keyframe
-        const float& sigmaSquare1 = obj1->extractor->mvLevelSigma2[kp1.octave];
+        const float &sigmaSquare1 = obj1->extractor->mvLevelSigma2[kp1.octave];
         const float x1 = Rcw1.row(0).dot(x3Dt) + tcw1.at<float>(0);
         const float y1 = Rcw1.row(1).dot(x3Dt) + tcw1.at<float>(1);
         const float invz1 = 1.0 / z1;
@@ -382,11 +464,83 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         cnt++;
     }
-    fmt::print("create {} {} mps\n", obj2->name, cnt);
+    // fmt::print("create {} {} mps\n", obj2->name, cnt);
     return cnt;
 }
 
-cv::Mat Map::ComputeF12(ObjectRef& rig1, ObjectRef& rig2) {
+// Fuse obj2's mappoint to obj1
+int Map::Fuse(const ObjectRef &obj1, const KeyFrame &kf, const std::unordered_set<MapPointRef> &mps) {
+    cv::Mat ow = obj1->GetCameraCenter();
+    uint cnt = 0;
+    for (const auto &mpr : mps) {
+        // 1, check view angle
+        cv::Mat PO = mpr->GetWorldPos() - ow;
+        cv::Mat Pn = mpr->GetNormalVector();
+        const float dist3D = cv::norm(PO);
+        //
+        // Viewing angle must be less than 60 deg
+        if (PO.dot(Pn) < 0.5 * dist3D) continue;
+
+        cv::Mat pc = obj1->Map(mpr);
+        const float z = pc.at<float>(2);
+        if (z <= 0) continue;
+        const float invz = 1. / z;
+        cv::Point2f uv = obj1->Project(pc);
+        std::vector<size_t> candidates = obj1->GetFeaturesInArea(uv, 10);
+        std::vector<cv::Mat> desps;
+        std::vector<uint> ori_kp_idx;
+        for (size_t idx : candidates) {
+            cv::KeyPoint kp = obj1->kps[idx];
+            const int &level = kp.octave;
+            if (level < max(0, int(mpr->level - 1)) || level > mpr->level) continue;
+            // check despcriptor difference
+            if (kf->depth_left[idx] >= 0) {
+                // Check reprojection error in stereo
+                const float ur = uv.x - kf->bf * invz;
+                const float &kpx = kp.pt.x;
+                const float &kpy = kp.pt.y;
+                const float &kpr = kf->depth_left[idx];
+                const float ex = uv.x - kpx;
+                const float ey = uv.y - kpy;
+                const float er = ur - kpr;
+                const float e2 = ex * ex + ey * ey + er * er;
+                if (e2 * obj1->extractor->mvLevelSigma2[level] > 7.8) continue;
+            } else {
+                const float &kpx = kp.pt.x;
+                const float &kpy = kp.pt.y;
+                const float ex = uv.x - kpx;
+                const float ey = uv.y - kpy;
+                const float e2 = ex * ex + ey * ey;
+                if (e2 * obj1->extractor->mvInvLevelSigma2[level] > 5.99) continue;
+            }
+            desps.emplace_back(obj1->desps.row(idx));
+            ori_kp_idx.push_back(idx);
+        }
+        MatchRes res = Matcher::KnnMatch({mpr->GetDesp()}, desps).FilterRatio().FilterThreshold();
+        if (res.size()) {
+            uint best_idx = ori_kp_idx[res[0].trainIdx];
+            if (obj1->count(best_idx)) {
+                // there alread has one mappoint;
+                MapPointRef tmp = obj1->GetMapPoint(best_idx);
+                if (tmp == nullptr) {
+                    obj1->count(best_idx);
+                    auto temp1 = obj1->GetMapPoint(best_idx);
+                }
+                if (tmp->GetObservationCnt() < mpr->GetObservationCnt()) {
+                    ReplaceMappoint(tmp, mpr);
+                } else {
+                    ReplaceMappoint(mpr, tmp);
+                }
+            } else {
+                obj1->AddMapPoint(mpr, best_idx);
+            }
+            cnt += 1;
+        }
+    }
+    return cnt;
+}
+
+cv::Mat Map::ComputeF12(ObjectRef &rig1, ObjectRef &rig2) {
     cv::Mat R1w = rig1->GetRotation();
     cv::Mat t1w = rig1->GetTranslation();
     cv::Mat R2w = rig2->GetRotation();
@@ -397,15 +551,15 @@ cv::Mat Map::ComputeF12(ObjectRef& rig1, ObjectRef& rig2) {
 
     cv::Mat t12x = Converter::toSkewSymmetricMatrix(t12);
 
-    const cv::Mat& K1 = rig1->mpCam->toK();
-    const cv::Mat& K2 = rig2->mpCam->toK();
+    const cv::Mat &K1 = rig1->mpCam->toK();
+    const cv::Mat &K2 = rig2->mpCam->toK();
 
     return K1.t().inv() * t12x * R12 * K2.inv();
 }
 
 std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
     std::vector<cv::Mat> ret;
-    for (std::tuple<cv::Mat, KeyFrame, bool>& p : trajectories) {
+    for (std::tuple<cv::Mat, KeyFrame, bool> &p : trajectories) {
         cv::Mat tf = std::get<0>(p);
         cv::Mat Tkf_w = std::get<1>(p)->GetPose();
         cv::Mat T_fi_world = tf * Tkf_w;
@@ -415,7 +569,7 @@ std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
 }
 std::vector<bool> Map::GetAllKeyFrameMaskForShow() {
     std::vector<bool> ret;
-    for (std::tuple<cv::Mat, KeyFrame, bool>& p : trajectories) {
+    for (std::tuple<cv::Mat, KeyFrame, bool> &p : trajectories) {
         ret.push_back(std::get<2>(p));
     }
     return ret;
@@ -424,8 +578,8 @@ std::vector<std::pair<cv::Mat, cv::Mat>> Map::GetEssentialGraph() {
     READLOCK lock(mtx_connection);
     std::vector<std::pair<cv::Mat, cv::Mat>> ret;
     std::unordered_set<uint> see_edges;
-    for (const std::pair<KeyFrame const, std::unordered_set<KeyFrame>>& p : essential_gragh) {
-        for (const KeyFrame& kf : p.second) {
+    for (const std::pair<KeyFrame const, std::unordered_set<KeyFrame>> &p : essential_gragh) {
+        for (const KeyFrame &kf : p.second) {
             if (see_edges.count(kf->id)) continue;
             ret.push_back({p.first->LEFT->GetCameraCenter(), kf->LEFT->GetCameraCenter()});
         }
@@ -436,7 +590,7 @@ std::vector<std::pair<cv::Mat, cv::Mat>> Map::GetEssentialGraph() {
 std::vector<cv::Mat> Map::GetAllMappointsForShow(CAM_NAME cam_name) {
     std::vector<cv::Mat> ret;
 
-    for (const MapPointRef& mpr : all_mappoints) {
+    for (const MapPointRef &mpr : all_mappoints) {
         if (mpr->create_from == cam_name) ret.push_back(mpr->position_w);
     }
     for (uint i = 0, sz = recent_created_mps.size(); i < sz; i++) {
@@ -457,8 +611,8 @@ void Map::UpdateConnections(KeyFrame kf) {
     std::unordered_map<KeyFrame, uint> kf_counter;
     std::unordered_set<MapPointRef> mps = kf->LEFT->GetMapPoints();
 
-    for (const MapPointRef& mp : mps) {
-        for (const auto& ob : mp->GetAllObservation()) {
+    for (const MapPointRef &mp : mps) {
+        for (const auto &ob : mp->GetAllObservation()) {
             KeyFrame relative_kf = ob.first;
             if (relative_kf->id != kf->id) kf_counter[relative_kf] += 1;
         }
@@ -469,7 +623,7 @@ void Map::UpdateConnections(KeyFrame kf) {
 
     // clear all edge in connection graph
     if (essential_gragh.count(kf)) {
-        for (const KeyFrame& _out_kf : essential_gragh[kf]) {
+        for (const KeyFrame &_out_kf : essential_gragh[kf]) {
             essential_gragh[_out_kf].erase(kf);
         }
         essential_gragh.erase(kf);
@@ -483,7 +637,7 @@ void Map::UpdateConnections(KeyFrame kf) {
     uint nmax = 0;
     KeyFrame max_conc_kf;
     bool added_conc = 0;
-    for (const std::pair<const KeyFrame, uint>& p : kf_counter) {
+    for (const std::pair<const KeyFrame, uint> &p : kf_counter) {
         const KeyFrame _kf = p.first;
         uint vote_cnt = p.second;
         if (vote_cnt > nmax) {
@@ -540,7 +694,8 @@ std::unordered_set<KeyFrame> Map::GrabLocalMap_EssGraph(KeyFrame kf, uint hop) {
     std::unordered_set<KeyFrame> cur_hop = ret;
     while (hop-- && cur_hop.size()) {
         std::unordered_set<KeyFrame> next_hop;
-        for (KeyFrame _kf : cur_hop) {
+
+        for (const KeyFrame &_kf : cur_hop) {
             for (KeyFrame _to_kf : essential_gragh[_kf]) {
                 if (ret.count(_to_kf) == 0) {
                     ret.insert(_to_kf);
@@ -559,7 +714,7 @@ std::unordered_set<KeyFrame> Map::GrabLocalMap_Mappoint(FrameRef frame, uint hop
     hop--;
     std::unordered_set<KeyFrame> ret;
     for (MapPointRef mp : frame->LEFT->GetMapPoints()) {
-        for (const pair<const KeyFrame, unordered_set<ObjectRef>>& p : mp->GetAllObservation()) {
+        for (const pair<const KeyFrame, unordered_set<ObjectRef>> &p : mp->GetAllObservation()) {
             ret.insert(p.first);
         }
     }
@@ -582,16 +737,16 @@ std::unordered_set<KeyFrame> Map::GrabLocalMap_Mappoint(FrameRef frame, uint hop
     return ret;
 }
 
-std::unordered_set<MapPointRef> Map::GrabLocalMappoint(const std::unordered_set<KeyFrame>& local_kfs, CAM_NAME name) {
+std::unordered_set<MapPointRef> Map::GrabLocalMappoint(const std::unordered_set<KeyFrame> &local_kfs, CAM_NAME name) {
     std::unordered_set<MapPointRef> ret;
-    for (const KeyFrame& kf : local_kfs) {
+    for (const KeyFrame &kf : local_kfs) {
         if (name & CAM_NAME::L) {
-            for (const auto& mp : kf->LEFT->GetMapPoints()) {
+            for (const auto &mp : kf->LEFT->GetMapPoints()) {
                 ret.insert(mp);
             }
         }
         if (name & CAM_NAME::W) {
-            for (const auto& mp : kf->WIDE->GetMapPoints()) {
+            for (const auto &mp : kf->WIDE->GetMapPoints()) {
                 ret.insert(mp);
             }
         }
@@ -599,7 +754,7 @@ std::unordered_set<MapPointRef> Map::GrabLocalMappoint(const std::unordered_set<
     return ret;
 }
 
-std::unordered_set<KeyFrame> Map::GrabAnchorKeyFrames(std::unordered_set<KeyFrame>& kfs) {
+std::unordered_set<KeyFrame> Map::GrabAnchorKeyFrames(std::unordered_set<KeyFrame> &kfs) {
     // find the keyframe with minmial id
     KeyFrame kf_min_id = nullptr;
     for (KeyFrame _kf : kfs) {

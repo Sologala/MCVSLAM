@@ -31,27 +31,27 @@ float Frame::b, Frame::bf, Frame::b_2;
 int extractORB(std::shared_ptr<Object> &obj, ORB *extractor) { return extractor->Extract(obj->img, obj->kps, obj->desps); }
 
 void KL_Track(ObjectRef obj1, ObjectRef obj2) {
-    // cv::Mat res, err;
-    std::vector<cv::KeyPoint> kps;
-    std::vector<cv::KeyPoint> next_kps;
-    std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
-    std::vector<uint> kps_idxs;
-    for (const auto &mp : mps) {
-        uint idx = obj1->GetMapPointIdx(mp);
-        kps.push_back(obj1->kps[idx]);
-        kps_idxs.push_back(idx);
-    }
-    std::vector<uchar> res;
-    std::vector<float> err;
+    // // cv::Mat res, err;
+    // std::vector<cv::KeyPoint> kps;
+    // std::vector<cv::KeyPoint> next_kps;
+    // std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
+    // std::vector<uint> kps_idxs;
+    // for (const auto &mp : mps) {
+    //     uint idx = obj1->GetMapPointIdx(mp);
+    //     kps.push_back(obj1->kps[idx]);
+    //     kps_idxs.push_back(idx);
+    // }
+    // std::vector<uchar> res;
+    // std::vector<float> err;
 
-    cv::calcOpticalFlowPyrLK(obj1->img, obj2->img, kps, next_kps, res, err);
+    // cv::calcOpticalFlowPyrLK(obj1->img, obj2->img, kps, next_kps, res, err);
 
-    for (uint i = 0, sz = res.size(); i < sz; i++) {
-        if (res[i] > 0 && err[i] < 1) {
-            obj2->AddMapPoint(mps[i], obj2->kps.size());
-            obj2->kps.push_back(kps[i]);
-        }
-    }
+    // for (uint i = 0, sz = res.size(); i < sz; i++) {
+    //     if (res[i] > 0 && err[i] < 1) {
+    //         obj2->AddMapPoint(mps[i], obj2->kps.size());
+    //         obj2->kps.push_back(kps[i]);
+    //     }
+    // }
 }
 
 Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right, BaseCamera *cam_wide,
@@ -63,7 +63,7 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
 
     {
         // KL Track
-        MyTimer::Timer _("KL Track");
+        // MyTimer::Timer _("KL Track");
     }
 
     {
@@ -173,7 +173,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
         // std::cout << right_desps[0] << std::endl;
         // std::cout << cv::Mat(right_desps) << endl;
         MatchResKnn res_knn = Matcher::KnnMatch(left_desps, right_desps, 2);
-        MatchRes res = res_knn.FilterRatio(0.6);
+        MatchRes res = res_knn.FilterRatio(0.66).FilterThreshold();
 
         // Subpixel match by correlation
         for (cv::DMatch &m : res) {
@@ -256,22 +256,23 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
 
     // 中值滤波
     sort(vDistIdx.begin(), vDistIdx.end());
+
+    // 过滤
     const float median = vDistIdx[vDistIdx.size() * 1.0 / 2].first;
     // 过滤掉了 离群点。
     // 实验如果不加滤波会怎么样？ 滤掉的都是那些点？ 是否有场景中本来应该是好的点被滤波滤掉了。
-    const float thDist = 1.5f * 1.4f * median;
-    uint cnt = 0;
-    for (int i = vDistIdx.size() - 1; i >= 0; i--) {
-        if (vDistIdx[i].first < thDist) {
-            break;
-        } else {
-            u_right[vDistIdx[i].second] = -1;
-            depth_left[vDistIdx[i].second] = -1;
-        }
-        cnt = i;
+    const float th_max_dist = 1.6f * median;
+    const float th_min_dist = 0.4 * median;
+    int l = 0, r = vDistIdx.size() - 1;
+    for (; r >= 0 && vDistIdx[r].first > th_max_dist; r--) {
+        u_right[vDistIdx[r].second] = -1;
+        depth_left[vDistIdx[r].second] = -1;
     }
-    fmt::print("matched {}\n", cnt);
-
+    for (; l < r && vDistIdx[l].first < th_min_dist; l++) {
+        u_right[vDistIdx[l].second] = -1;
+        depth_left[vDistIdx[l].second] = -1;
+    }
+    // fmt::print("matched {}\n", r - l + 1);
     // cv::Mat outimg;
     // cv::drawMatches(LEFT->img, LEFT->kps, RIGHT->img, RIGHT->kps, match_res_recored, outimg);
     // cv::imshow("outimg", outimg);

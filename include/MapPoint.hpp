@@ -42,6 +42,7 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     cv::Mat GetNormalVector();
     void UpdateNormalVector();
     void ComputeDistinctiveDescriptors();
+
     bool isBad();
     void SetBad();
 

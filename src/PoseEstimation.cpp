@@ -82,7 +82,7 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
     // at the end they can be classified as inliers again.
     const float chi2Mono[4] = {5.991, 5.991, 5.991, 5.991};
     const float chi2Stereo[4] = {7.815, 7.815, 7.815, 7.815};
-    const int its[4] = {6, 12, 15, 15};
+    const int its[4] = {5, 6, 7, 8};
 
     int nBad = 0;
     int nleft, nwide = 0;

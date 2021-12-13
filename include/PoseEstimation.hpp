@@ -36,9 +36,15 @@ template <typename Filter_CallBack>
 inline int PoseEstimation::BoundleAdjustment(const std::unordered_set<KeyFrame>& kfs, const std::unordered_set<KeyFrame>& fix_kfs, uint n_iter,
                                              Filter_CallBack&& Filter_CALLBACK) {
     BAoptimizer op;
+    uint cnt_mp_fix = 0, cnt_mp_nfix = 0;
     for (const KeyFrame& kf : fix_kfs) {
         op.addKeyFrame(kf, true);
         for (MapPointRef mp : kf->LEFT->GetMapPoints()) {
+            if (ThisMapPointBeFix(mp, kfs, fix_kfs))
+                cnt_mp_fix += 1;
+            else
+                cnt_mp_nfix += 1;
+
             op.addMapppint(mp, ThisMapPointBeFix(mp, kfs, fix_kfs));
             // Monocular observation
             uint idx = kf->LEFT->GetMapPointIdx(mp);
@@ -54,6 +60,10 @@ inline int PoseEstimation::BoundleAdjustment(const std::unordered_set<KeyFrame>&
         for (MapPointRef mp : kf->WIDE->GetMapPoints()) {
             op.addMapppint(mp, ThisMapPointBeFix(mp, kfs, fix_kfs));
             uint idx = kf->WIDE->GetMapPointIdx(mp);
+            if (ThisMapPointBeFix(mp, kfs, fix_kfs))
+                cnt_mp_fix += 1;
+            else
+                cnt_mp_nfix += 1;
             cv::KeyPoint kp = kf->WIDE->kps[idx];
             op.addEdgeToBody(kf, mp, kp.pt, kp.octave);
         }
@@ -61,9 +71,14 @@ inline int PoseEstimation::BoundleAdjustment(const std::unordered_set<KeyFrame>&
     for (const KeyFrame& kf : kfs) {
         op.addKeyFrame(kf, false);
         for (MapPointRef mp : kf->LEFT->GetMapPoints()) {
+            if (ThisMapPointBeFix(mp, kfs, fix_kfs))
+                cnt_mp_fix += 1;
+            else
+                cnt_mp_nfix += 1;
             op.addMapppint(mp, ThisMapPointBeFix(mp, kfs, fix_kfs));
             // Monocular observation
             uint idx = kf->LEFT->GetMapPointIdx(mp);
+
             cv::KeyPoint kp = kf->LEFT->kps[idx];
             if (kf->u_right[idx] != -1 && kf->u_right[idx] >= MIN_DISPARITY) {
                 op.addEdgeStereo(kf, mp, kp.pt, kf->u_right[idx], kp.octave);
@@ -74,12 +89,18 @@ inline int PoseEstimation::BoundleAdjustment(const std::unordered_set<KeyFrame>&
         }
 
         for (MapPointRef mp : kf->WIDE->GetMapPoints()) {
+            if (ThisMapPointBeFix(mp, kfs, fix_kfs))
+                cnt_mp_fix += 1;
+            else
+                cnt_mp_nfix += 1;
             op.addMapppint(mp, ThisMapPointBeFix(mp, kfs, fix_kfs));
             uint idx = kf->WIDE->GetMapPointIdx(mp);
             cv::KeyPoint kp = kf->WIDE->kps[idx];
             op.addEdgeToBody(kf, mp, kp.pt, kp.octave);
         }
     }
+    fmt::print("fix mps {} no fix mp {}  \n", cnt_mp_fix, cnt_mp_nfix);
+
     op.optimize(n_iter);
 
     // filter call back

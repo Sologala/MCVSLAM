@@ -29,18 +29,23 @@ class Map {
     static uint cnt_kf, used_kf, cnt_mp, used_mp;
     MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name);
     MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name);
+
     FrameRef CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
-                         BaseCamera *cam_wide);
+                         BaseCamera *cam_wide, const std::vector<FrameRef> &optical_flow_frams);
 
     void AddKeyFrame(FrameRef frame);
     void DelKeyFrame(FrameRef frame);
-    void DelAllMappointObservation(MapPointRef mp);
 
+    void DelAllMappointObservation(MapPointRef mp);
+    void ReplaceMappoint(MapPointRef mp1, MapPointRef mp2);
+    void CullingMapppoints();
     void Clear();
     // Mapping
     int TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1, KeyFrame kf2, float min_baseline,
                                   const std::vector<float> &uright_obj1 = {}, const std::vector<float> &uright_obj2 = {});
 
+    // Fuse obj1's with provided mappoints
+    int Fuse(const ObjectRef &obj1, const KeyFrame &kf, const std::unordered_set<MapPointRef> &mps);
     static cv::Mat ComputeF12(ObjectRef &rig1, ObjectRef &rig2);
 
     // statistics
@@ -59,7 +64,8 @@ class Map {
 
     // grab some subgraph by some strategies
     std::unordered_set<KeyFrame> GrabLocalMap_EssGraph(KeyFrame kf, uint hop);
-    // grab by frame's relative mappoint, used when this frame has not updated connection.
+    // grab by frame's relative mappoint, used when this frame has not updated
+    // connection.
     std::unordered_set<KeyFrame> GrabLocalMap_Mappoint(FrameRef frame, uint hop);
 
     std::unordered_set<MapPointRef> GrabLocalMappoint(const std::unordered_set<KeyFrame> &local_kfs, CAM_NAME name);

@@ -4,6 +4,7 @@
 #include <boost/thread.hpp>
 #include <boost/thread/pthread/mutex.hpp>
 #include <memory>
+#include <opencv2/core/types.hpp>
 #include <unordered_set>
 #include <vector>
 
@@ -46,34 +47,100 @@ class Object {
     // ---------------------[Pose] ----------------------
     // Set the camera pose. (Imu pose is not modified!)
 
-    void SetPose(cv::Mat Tcw);
+    void SetPose(cv::Mat Tcw) {
+        WRITELOCK lock(mtx_pose);
+        // std::unique_lock<std::mutex> lock(mtxPose);
+        mTcw = Tcw.clone();
+        UpdatePoseMatrix();
+    }
 
-    cv::Mat GetPose();
-    cv::Mat GetPoseInverse();
-    cv::Mat GetCameraCenter();
-    cv::Mat GetRotation();
-    cv::Mat GetTranslation();
+    cv::Mat GetPose() {
+        READLOCK lock(mtx_pose);
+        // std::unique_lock<std::mutex> lock(mtxPose);
+        return mTcw.clone();
+    }
+    cv::Mat GetPoseInverse() {
+        READLOCK lock(mtx_pose);
+        // std::unique_lock<std::mutex> lock(mtxPose);
+        return mTwc.clone();
+    }
 
-    cv::Mat Map(const cv::Mat &x3D);
-    cv::point2f Project(const cv::Mat &x3D);
+    cv::Mat GetCameraCenter() {
+        READLOCK lock(mtx_pose);
+        // std::unique_lock<std::mutex> lock(mtxPose);
+        return mOw.clone();
+    }
+    cv::Mat GetRotation() {
+        READLOCK lock(mtx_pose);
+        // std::unique_lock<std::mutex> lock(mtxPose);
+        return mRcw.clone();
+    }
+
+    cv::Mat GetTranslation() {
+        READLOCK lock(mtx_pose);
+        // std::unique_lock<std::mutex> lock(mtxPose);
+        return mtcw.clone();
+    }
+
+    cv::Mat Map(const cv::Mat &x3D) {
+        READLOCK lock(mtx_pose);
+        return mRcw * x3D + mtcw;
+    }
+    cv::Mat Map(const MapPointRef &mpr) { return Map(mpr->GetWorldPos()); }
+
+    cv::Point2f Project(const cv::Mat &x3D) { return mpCam->project(x3D); }
 
     // ------------------------[Map Points]--------------------
-    void clear();
 
-    bool count(MapPointRef pMP);
-    bool count(size_t idx);
+    bool count(MapPointRef pMP) {
+        if (pMP == NULL) return false;
+        READLOCK lock(mtx_mps);
+        if (mMP2IDX.count(pMP) == 0) return false;
+        return true;
+    }
+    bool count(size_t idx) {
+        if (idx < 0 || idx >= size()) return false;
+        READLOCK lock(mtx_mps);
+        if (mIDX2MP.count(idx) == 0) return false;
+        return true;
+    }
 
-    std::vector<MapPointRef> GetMapPointsVector();
-    std::unordered_set<MapPointRef> GetMapPoints();
-    std::unordered_set<MapPointRef> GetMapPoints(uint th_obs);
-    std::unordered_set<uint> GetAllMapPointsIdxs();
+    std::vector<MapPointRef> GetMapPointsVector() {
+        std::vector<MapPointRef> ret;
+        {
+            READLOCK lock(mtx_mps);
+            ret.assign(all_mps.begin(), all_mps.end());
+        }
+        return ret;
+    }
+
+    std::unordered_set<MapPointRef> GetMapPoints() {
+        READLOCK lock(mtx_mps);
+        return all_mps;
+    }
+    std::unordered_set<MapPointRef> GetMapPoints(uint th_obs) {
+        READLOCK lock(mtx_mps);
+        std::unordered_set<MapPointRef> ret;
+        for (auto &mp : all_mps) {
+            if (mp->GetObservationCnt() >= th_obs) ret.insert(mp);
+        }
+        return ret;
+    }
+    std::unordered_set<uint> GetAllMapPointsIdxs() {
+        READLOCK lock(mtx_mps);
+        std::unordered_set<uint> ret;
+        for (const auto &p : mIDX2MP) {
+            ret.insert(p.first);
+        }
+        return ret;
+    }
     size_t GetMapPointIdx(MapPointRef pMP);
 
     MapPointRef GetMapPoint(size_t idx);
 
     void AddMapPoint(MapPointRef pMP, size_t idx);
 
-    void replaceMapPoint(MapPointRef pMP, MapPointRef pMP1);
+    void ReplaceMapPoint(MapPointRef mp1, MapPointRef mp2);
 
     void DelMapPoint(size_t idx);
 
@@ -85,6 +152,7 @@ class Object {
     // ---------------------[Grid] ----------------------
     bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
 
+    std::vector<size_t> GetFeaturesInArea(const cv::Point2f uv, const float &r, const int minLevel = -1, const int maxLevel = -1) const;
     std::vector<size_t> GetFeaturesInArea(const float &x, const float &y, const float &r, const int minLevel = -1, const int maxLevel = -1) const;
 
     // ---------------------[Camera parameter]
@@ -127,6 +195,13 @@ class Object {
 
     static DBoW3::Vocabulary voc;
     ORB *extractor;
+
+    void clear() {
+        WRITELOCK lock(mtx_mps);
+        mMP2IDX.clear();
+        mIDX2MP.clear();
+        all_mps.clear();
+    }
 
    private:
     Grid grid;
