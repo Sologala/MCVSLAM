@@ -1,4 +1,4 @@
-# Multi Camera Visual SlAM 
+# Multi Camera Visual SLAM 
 This repo is aim to realise a simple visual slam system which support multi camera configruation. Meanwhile, we also utilize the OpensceneGraph to simulate some drone motion scene with groundtrugh trajectory, also use it to visulize our sparse mapping result, and try to find some strategies to improve the system.
 
 Currently, I am mainly use it to build a convinent platform for accomplish my thesis. So I have no more energy to manage pull request and merge request, Any idea or question or suggestion is welcome to be descuss in issues.
