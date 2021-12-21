@@ -82,7 +82,7 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
     // at the end they can be classified as inliers again.
     const float chi2Mono[4] = {5.991, 5.991, 5.991, 5.991};
     const float chi2Stereo[4] = {7.815, 7.815, 7.815, 7.815};
-    const int its[4] = {5, 6, 7, 8};
+    const int its[4] = {15, 15, 15, 15};
 
     int nBad = 0;
     int nleft, nwide = 0;
@@ -108,6 +108,8 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
             const float thres_hold = (obj->name == CAM_NAME::R ? chi2Stereo[it] : chi2Mono[it]);
             if (chi2 >= thres_hold) {
                 e->setLevel(1);
+                mp->ProjectResRecord(false);
+                obj->DelMapPoint(mp);
                 nBad++;
             }
             if (it == 2) e->setRobustKernel(0);
@@ -138,6 +140,7 @@ bool MCVSLAM::PoseEstimation::FilterCallBack_Chi2(const BAoptimizer::EdgeInfoMat
     const float thres_hold = (obj->name == CAM_NAME::R ? CHI2_STEREO_THRESHOLD : CHI2_MONO_THRESHOLD);
     if (chi2 >= thres_hold) {
         obj->DelMapPoint(mp);
+        mp->ProjectResRecord(false);
         e->setLevel(1);
         return true;
     }
