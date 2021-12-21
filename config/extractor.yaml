@@ -1,6 +1,6 @@
-nkeypoints: 2000
+nkeypoints: 1500
 scale_factor: 1.2
-nlevels: 1
+nlevels: 3
 
 
 # ORB Extractor: Fast threshold

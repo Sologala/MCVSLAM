@@ -46,9 +46,15 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     bool isBad();
     void SetBad();
 
+    // found
+    void ProjectResRecord(bool _project_res);
+    float GetProjectSucessRate();
+
    public:
     // Position in absolute coordinates
     cv::Mat position_w;
+    // historical position
+    std::vector<cv::Mat> historic_position_w;
     cv::Mat desp;
     uint level;
     uint id;
@@ -61,6 +67,10 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     bool is_bad = false;
     cv::Mat norm_vec;
     Observation relative_kfs;
+
+    // [found_cnt] statistics the number of times when success to project this mappoint to a frame and find a match in it .
+    uint project_cnt = 0;
+    uint project_sucess_cnt = 0;
 
     // Mappoint LiftSpan
     uint lifespan;

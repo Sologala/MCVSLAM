@@ -7,6 +7,7 @@ out.*
 *.vscode
 app
 
+
 third_repos
 # Prerequisites
 *.d
@@ -38,6 +39,10 @@ third_repos
 *.la
 *.a
 *.lib
+
+# common python 
+*.pyc
+__pycache__
 
 # Executables
 *.exe

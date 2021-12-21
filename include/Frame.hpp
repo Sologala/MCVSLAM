@@ -34,6 +34,8 @@ class Frame {
 
    public:
     ObjectRef LEFT, RIGHT, WIDE;
+
+    // variables for kl track
     uint kl_left, kl_right, kl_wide;
 
     uint id;
