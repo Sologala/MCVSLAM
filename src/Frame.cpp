@@ -5,6 +5,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/highgui.hpp>
 #include <pyp/yaml/yaml.hpp>
+#include <vector>
 
 #include "Map.hpp"
 #include "Matcher.hpp"
@@ -30,28 +31,48 @@ float Frame::b, Frame::bf, Frame::b_2;
 
 int extractORB(std::shared_ptr<Object> &obj, ORB *extractor) { return extractor->Extract(obj->img, obj->kps, obj->desps); }
 
-void KL_Track(ObjectRef obj1, ObjectRef obj2) {
-    // // cv::Mat res, err;
-    // std::vector<cv::KeyPoint> kps;
-    // std::vector<cv::KeyPoint> next_kps;
-    // std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
-    // std::vector<uint> kps_idxs;
-    // for (const auto &mp : mps) {
-    //     uint idx = obj1->GetMapPointIdx(mp);
-    //     kps.push_back(obj1->kps[idx]);
-    //     kps_idxs.push_back(idx);
-    // }
-    // std::vector<uchar> res;
-    // std::vector<float> err;
+uint KL_Track(ObjectRef obj1, ObjectRef obj2, unordered_map<MapPointRef, uint> &mp2idx) {
+    // cv::Mat res, err;
+    std::vector<cv::KeyPoint> kps;
+    std::vector<cv::Point2f> pts;
+    std::vector<cv::KeyPoint> next_kps;
+    std::vector<cv::Point2f> next_pts;
+    std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
+    if (mps.size() < 10) return 0;
+    std::vector<uint> kps_idxs;
 
-    // cv::calcOpticalFlowPyrLK(obj1->img, obj2->img, kps, next_kps, res, err);
+    for (const auto &mp : mps) {
+        uint idx = obj1->GetMapPointIdx(mp);
+        kps.push_back(obj1->kps[idx]);
+        pts.push_back(obj1->kps[idx].pt);
+        kps_idxs.push_back(idx);
+    }
 
-    // for (uint i = 0, sz = res.size(); i < sz; i++) {
-    //     if (res[i] > 0 && err[i] < 1) {
-    //         obj2->AddMapPoint(mps[i], obj2->kps.size());
-    //         obj2->kps.push_back(kps[i]);
-    //     }
-    // }
+    std::vector<uchar> res;
+    std::vector<float> err;
+
+    cv::Size winSize = cv::Size(21, 21);
+    cv::TermCriteria termcrit = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
+    calcOpticalFlowPyrLK(obj1->img, obj2->img, pts, next_pts, res, err, winSize, 3, termcrit, 0, 0.001);
+
+    uint cnt = 0;
+    for (uint i = 0, sz = res.size(); i < sz; i++) {
+        if (res[i] > 0 && err[i] < 1) {
+            // kl track success
+            // 1. check if there is alread have see this mappoint before
+            if (mp2idx.count(mps[i])) {
+                continue;
+            }
+            // 2. add new keypoint
+            mp2idx[mps[i]] = obj2->kps.size();
+            cv::KeyPoint newkp = kps[i];
+            newkp.pt = next_pts[i];
+            newkp.octave = 0;
+            obj2->kps.push_back(newkp);
+            cnt++;
+        }
+    }
+    return cnt;
 }
 
 Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right, BaseCamera *cam_wide,
@@ -61,9 +82,37 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     RIGHT = std::make_shared<Object>(cam_left, imgright, &extractor_right, CAM_NAME::R);
     WIDE = std::make_shared<Object>(cam_wide, imgwide, &extractor_wide, CAM_NAME::W);
 
+    static unordered_map<MapPointRef, uint> mp2idx;
+    static unordered_map<MapPointRef, uint> mp2idx_wide;
+    mp2idx.clear();
+    mp2idx_wide.clear();
     {
         // KL Track
-        // MyTimer::Timer _("KL Track");
+        MyTimer::Timer _("KL Track");
+        std::vector<FrameRef> all_frames(optical_flow_frams.begin(), optical_flow_frams.end());
+        static auto cmp_frame = [](const FrameRef &a, const FrameRef &b) { return a->id > b->id; };
+        sort(all_frames.begin(), all_frames.end(), cmp_frame);
+
+        for (const FrameRef &f : all_frames) {
+            KL_Track(f->LEFT, LEFT, mp2idx);
+            KL_Track(f->WIDE, WIDE, mp2idx_wide);
+        }
+        // cout << endl;
+        // for (auto kp : LEFT->kps) {
+        //     cout << kp.pt << " ";
+        // }
+        // cout << endl;
+        // for (auto kp : WIDE->kps) {
+        //     cout << kp.pt << " ";
+        // }
+        // cout << endl;
+
+        for (const auto &p : mp2idx) {
+            LEFT->AddMapPoint(p.first, p.second);
+        }
+        for (const auto &p : mp2idx_wide) {
+            WIDE->AddMapPoint(p.first, p.second);
+        }
     }
 
     {
