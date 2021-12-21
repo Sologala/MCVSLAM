@@ -139,10 +139,10 @@ void Map::AddKeyFrame(FrameRef frame) {
     if (frame->id != 0) {
         // Perform local ba
         MyTimer::Timer _("Local BA");
-        local_kfs = GrabLocalMap_Mappoint(frame, 1);
+        local_kfs = GrabLocalMap_Mappoint(frame, 2);
         std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
         local_kfs.insert(frame);
-        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 20, &PoseEstimation::FilterCallBack_Chi2);
+        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 30, &PoseEstimation::FilterCallBack_Chi2);
         fmt::print("[local ba] res {}  kfs {}, fix_kfs {}\n", op_cnt, local_kfs.size(), fix_local_kfs.size());
         for (const KeyFrame &kf : local_kfs) {
             Map::UpdateConnections(kf);
@@ -214,26 +214,30 @@ void Map::CullingMapppoints() {
         recent_created_mps.pop_front();
         uint ob_cnt = mp->GetObservationCnt();
 
-        enum Action { DEL, STAY, SAVE };
-        Action act;
+        enum Action { DEL_IMMEDIATE, DEL, STAY, SAVE };
+        Action act = STAY;
         if (mp->isBad()) {
-            act = DEL;
+            act = DEL_IMMEDIATE;
+        } else if (mp->GetProjectSucessRate() < 0.4) {
+            // 在 KeyFrame 到 Frame 的投影中，属于是weak 的mappoint
+            act = DEL_IMMEDIATE;
         } else if (ob_cnt < 2) {
-            if (mp->lifespan >= 0) {
-                act = STAY;
-                mp->lifespan--;
-            } else {
-                act = DEL;
-            }
-
-        } else {
+            // life span 参考 system.yaml 中的配置，目前配置的是7
+            act = DEL;
+        } else if (mp->lifespan == 0) {
+            // save this mappoint if it can pass the check in all lifespan
             act = SAVE;
         }
 
-        if (act == DEL) {
+        if (act == DEL && mp->lifespan) {
+            act = STAY;
+        }
+
+        if (act == DEL_IMMEDIATE) {
             DelAllMappointObservation(mp);
         } else if (act == STAY) {
             recent_created_mps.push_back(mp);
+            mp->lifespan--;
         } else if (act == SAVE) {
             all_mappoints.insert(mp);
         }
@@ -489,6 +493,8 @@ int Map::Fuse(const ObjectRef &obj1, const KeyFrame &kf, const std::unordered_se
         std::vector<size_t> candidates = obj1->GetFeaturesInArea(uv, 10);
         std::vector<cv::Mat> desps;
         std::vector<uint> ori_kp_idx;
+
+        bool project_res = false;
         for (size_t idx : candidates) {
             cv::KeyPoint kp = obj1->kps[idx];
             const int &level = kp.octave;
@@ -525,6 +531,7 @@ int Map::Fuse(const ObjectRef &obj1, const KeyFrame &kf, const std::unordered_se
                 if (tmp == nullptr) {
                     obj1->count(best_idx);
                     auto temp1 = obj1->GetMapPoint(best_idx);
+                    project_res = true;
                 }
                 if (tmp->GetObservationCnt() < mpr->GetObservationCnt()) {
                     ReplaceMappoint(tmp, mpr);
@@ -533,9 +540,11 @@ int Map::Fuse(const ObjectRef &obj1, const KeyFrame &kf, const std::unordered_se
                 }
             } else {
                 obj1->AddMapPoint(mpr, best_idx);
+                project_res = true;
             }
             cnt += 1;
         }
+        mpr->ProjectResRecord(project_res);
     }
     return cnt;
 }

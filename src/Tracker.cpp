@@ -33,7 +33,10 @@ Tracker::Tracker(Map *_map, osg_viewer *_viewer, const std::string &config_file)
 
 Tracker::~Tracker() {}
 
-Track_State Tracker::Track(FrameRef cur_frame) {
+Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
+                           BaseCamera *cam_wide) {
+    FrameRef cur_frame = map->CreateFrame(imgleft, imgright, imgwide, time_stamp, cam_left, cam_left, cam_wide, GetLastKeyFrame(3));
+
     Track_State state = Track_State::OK;
 
     if (GetLastKeyFrame() == nullptr) {
@@ -200,6 +203,14 @@ void Tracker::Clear() {
     fmt::print("Tracker cleared\n");
 }
 
+std::vector<KeyFrame> Tracker::GetLastKeyFrame(uint cnt) {
+    std::vector<KeyFrame> kfs;
+    if (queue_keyframe.empty()) return kfs;
+    for (auto rit = queue_frame.rbegin(), rend = queue_frame.rend(); cnt && rit != rend; rit++) {
+        kfs.push_back(*rit);
+    }
+    return kfs;
+}
 KeyFrame Tracker::GetLastKeyFrame() {
     if (queue_keyframe.empty()) return nullptr;
     return queue_keyframe.back();
@@ -289,33 +300,11 @@ uint Tracker::Init(KeyFrame &cur_frame) {
             // cout << mp << endl;
             auto mpr = map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->LEFT->kps[i].octave, cur_frame->id, CAM_NAME::L);
             cur_frame->LEFT->AddMapPoint(mpr, i);
+            mpr->ProjectResRecord(true);
             cnt += 1;
         }
     }
     return cnt;
-}
-
-void Tracker::KL_Track(ObjectRef obj1, ObjectRef obj2) {
-    // // cv::Mat res, err;
-    // MyTimer::Timer _("KL Track");
-    // std::vector<cv::KeyPoint> kps;
-    // std::vector<cv::KeyPoint> next_kps;
-    // std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
-    // std::vector<uint> kps_idxs;
-    // for (const auto& mp : mps) {
-    //     uint idx = obj1->GetMapPointIdx(mp);
-    //     kps.push_back(obj1->kps[idx]);
-    //     kps_idxs.push_back(idx);
-    // }
-    // std::vector<uchar> res;
-    // std::vector<float> err;
-
-    // cv::calcOpticalFlowPyrLK(obj1->img, obj2->img, kps, next_kps, res, err);
-    // for (uint i = 0, sz = res.size(); i < sz; i++) {
-    //     if (res[i] > 0 && err[i] < 1) {
-    //         obj2->AddMapPoint(mps[i], kps_idxs[i]);
-    //     }
-    // }
 }
 
 uint Tracker::Bow_Track(ObjectRef obj1, ObjectRef obj2) {

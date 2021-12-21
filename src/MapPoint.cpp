@@ -28,6 +28,9 @@ const cv::Mat MapPoint::GetWorldPos() {
 void MapPoint::SetWorldPose(const cv::Mat &pos) {
     WRITELOCK _lock(mtx_pos);
     position_w = pos.clone();
+
+    // record historic position.
+    historic_position_w.push_back(pos.clone());
 }
 
 const cv::Mat MapPoint::GetDesp() {
@@ -153,6 +156,15 @@ bool MapPoint::isBad() {
 void MapPoint::SetBad() {
     WRITELOCK _lock(mtx_feature);
     is_bad = true;
+}
+void MapPoint::ProjectResRecord(bool _project_res) {
+    WRITELOCK _lock(mtx_feature);
+    project_cnt += 1;
+    project_sucess_cnt += 1;
+}
+float MapPoint::GetProjectSucessRate() {
+    READLOCK _lock(mtx_feature);
+    return static_cast<float>(project_sucess_cnt) / static_cast<float>(project_cnt);
 }
 void MapPoint::UpdateNormalVector() {
     Observation obs = GetAllObservation();
