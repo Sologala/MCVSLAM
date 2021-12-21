@@ -797,10 +797,35 @@ void ORBextractor::ComputeKeyPointsOld(std::vector<std::vector<KeyPoint>>& allKe
     for (int level = 0; level < nlevels; ++level) computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
 }
 
-void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const vector<Point>& pattern) {
-    descriptors = Mat::zeros((int)keypoints.size(), 32, CV_8UC1);
+class computeDescripotor_Loop : public cv::ParallelLoopBody {
+   public:
+    const cv::Mat& img;
+    cv::Mat& target;
+    const vector<KeyPoint>& kps;
+    const vector<Point>& pattern;
+    const int offset;
+    computeDescripotor_Loop(const cv::Mat& _img, cv::Mat& _target, const int _offset, const vector<KeyPoint>& _kps, const vector<Point>& _pattern)
+        : img(_img), target(_target), kps(_kps), pattern(_pattern), offset(_offset) {}
+    ~computeDescripotor_Loop(){};
 
+    virtual void operator()(const cv::Range& r) const {
+        for (int i = r.start; i != r.end; i++)  //遍历
+        {
+            computeOrbDescriptor(kps[i], img, &pattern[0], target.ptr((int)i + offset));
+        }
+    }
+};
+
+// void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const vector<Point>& pattern) {
+//     descriptors = Mat::zeros((int)keypoints.size(), 32, CV_8UC1);
+
+//     for (size_t i = 0; i < keypoints.size(); i++) computeOrbDescriptor(keypoints[i], image, &pattern[0], descriptors.ptr((int)i));
+// }
+
+void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Mat& descriptors, const int offset, const vector<Point>& pattern) {
     for (size_t i = 0; i < keypoints.size(); i++) computeOrbDescriptor(keypoints[i], image, &pattern[0], descriptors.ptr((int)i));
+    // computeDescripotor_Loop loop(image, descriptors, offset, keypoints, pattern);
+    // cv::parallel_for_(cv::Range(0, keypoints.size()), loop);
 }
 
 int ORBextractor::operator()(InputArray _image, InputArray _mask, vector<KeyPoint>& _keypoints, OutputArray _descriptors,
@@ -817,25 +842,28 @@ int ORBextractor::operator()(InputArray _image, InputArray _mask, vector<KeyPoin
     vector<vector<KeyPoint>> allKeypoints;
     ComputeKeyPointsOctTree(allKeypoints);
     // ComputeKeyPointsOld(allKeypoints);
-
+    for (const KeyPoint& kp : _keypoints) {
+        allKeypoints[kp.octave].push_back(kp);
+    }
     Mat descriptors;
 
-    int nkeypoints = 0;
-    for (int level = 0; level < nlevels; ++level) nkeypoints += (int)allKeypoints[level].size();
-    if (nkeypoints == 0)
+    int nkp = 0;
+    for (int level = 0; level < nlevels; ++level) nkp += (int)allKeypoints[level].size();
+    // pre distribute all kps already in _keypoints to the OctTree
+
+    if (nkp == 0)
         _descriptors.release();
     else {
-        _descriptors.create(nkeypoints, 32, CV_8U);
+        _descriptors.create(nkp, 32, CV_8U);
         descriptors = _descriptors.getMat();
     }
-
     //_keypoints.clear();
     //_keypoints.reserve(nkeypoints);
-    _keypoints = vector<cv::KeyPoint>(nkeypoints);
+    _keypoints = vector<cv::KeyPoint>(nkp);
 
     int offset = 0;
     // Modified for speeding up stereo fisheye matching
-    int monoIndex = 0, stereoIndex = nkeypoints - 1;
+    int cnt = 0;
     for (int level = 0; level < nlevels; ++level) {
         vector<KeyPoint>& keypoints = allKeypoints[level];
         int nkeypointsLevel = (int)keypoints.size();
@@ -847,9 +875,9 @@ int ORBextractor::operator()(InputArray _image, InputArray _mask, vector<KeyPoin
         GaussianBlur(workingMat, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
 
         // Compute the descriptors
-        // Mat desc = descriptors.rowRange(offset, offset + nkeypointsLevel);
-        Mat desc = cv::Mat(nkeypointsLevel, 32, CV_8U);
-        computeDescriptors(workingMat, keypoints, desc, pattern);
+        Mat desc = descriptors.rowRange(offset, offset + nkeypointsLevel);
+        // Mat desc = cv::Mat(nkeypointsLevel, 32, CV_8U);
+        computeDescriptors(workingMat, keypoints, desc, 0, pattern);
 
         offset += nkeypointsLevel;
 
@@ -861,20 +889,13 @@ int ORBextractor::operator()(InputArray _image, InputArray _mask, vector<KeyPoin
                 keypoint->pt *= scale;
             }
 
-            if (keypoint->pt.x >= vLappingArea[0] && keypoint->pt.x <= vLappingArea[1]) {
-                _keypoints.at(stereoIndex) = (*keypoint);
-                desc.row(i).copyTo(descriptors.row(stereoIndex));
-                stereoIndex--;
-            } else {
-                _keypoints.at(monoIndex) = (*keypoint);
-                desc.row(i).copyTo(descriptors.row(monoIndex));
-                monoIndex++;
-            }
+            _keypoints.at(cnt) = (*keypoint);
+            // desc.row(i).copyTo(descriptors.row(cnt));
+            cnt++;
             i++;
         }
     }
-    // cout << "[ORBextractor]: extracted " << _keypoints.size() << " KeyPoints" << endl;
-    return monoIndex;
+    return cnt;
 }
 
 void ORBextractor::ComputePyramid(cv::Mat image) {
