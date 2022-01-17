@@ -3,7 +3,8 @@ Capture.fps: 2
 Capture.topic: "multi/image"
 Capture.percent: 1
 Capture.frame_by_frame: true
-# Capture.percent: 1
+Capture.loop: false
+
 Capture0.VideoPath: "/home/wen/SLAM/Datasets/data/left/*.png"
 Capture0.topic: "left/image"
 # Capture1.VideoPath: "/home/wen/HardDisk/VisDrone/SOT/VisDrone2018-SOT-test-dev/sequences/uav0000021_00000_s.mp4"

@@ -33,7 +33,7 @@ target_include_directories(MCVSLAM  PUBLIC
 target_link_libraries( MCVSLAM 
     ${OpenCV_LIBS}
     thread_pool
-    ros_msg
+    # ros_msg
     capture
     ORB
     SURF

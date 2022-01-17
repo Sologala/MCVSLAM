@@ -108,6 +108,8 @@ void CaptureConfig::Parse(const std::string &configPath) {
             temp_topic_name = fs[temp_key + ".topic"].As<string>();
             caps.push_back({temp_source, temp_topic_name});
         }
+
+        loop = fs["Capture.loop"].As<bool>();
     }
 }
 
@@ -127,32 +129,38 @@ Capture::~Capture() {
     // delete cap;
 }
 
-bool Capture::get(cv::Mat &img) {
+// 0 : ok  1: all done -1 : false
+int Capture::get(cv::Mat &img) {
     timeStamp += 1;
-
-    if (int(timeStamp) % len == 0 && mode == Work_Mode::VIDEO_FILE) {
-        cap->release();
-        cap->open(file_name);
-    } else if (int(timeStamp) % len == 0 && mode == Work_Mode::PATH) {
-        img_path_idx = 0;
+    if (Capture::global_capture_config.loop) {
+        if (int(timeStamp) % len == 0 && mode == Work_Mode::VIDEO_FILE) {
+            cap->release();
+            cap->open(file_name);
+        } else if (int(timeStamp) % len == 0 && mode == Work_Mode::PATH) {
+            img_path_idx = 0;
+        }
+    } else {
+        if (int(timeStamp) % len == 0) {
+            fmt::print("capture {} has played all images\n", cam_id);
+            return 1;
+        }
     }
-
     if (mode == Work_Mode::VIDEO_FILE || mode == Work_Mode::WEBCAM) {
         cap->grab();
         bool ret = cap->retrieve(img);
         if (ret == false) {
             fmt::print("capture image from camera {} Faild\n", cam_id);
-            return false;
+            return -1;
         }
     } else if (mode == Work_Mode::PATH) {
         img = cv::imread(img_paths[img_path_idx]);
         if (img.empty()) {
             fmt::print("capture image from file {} Faild\n", img_paths[img_path_idx]);
-            return false;
+            return -1;
         }
         img_path_idx++;
     }
-    return true;
+    return 0;
 }
 
 void Capture::reset() {

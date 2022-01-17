@@ -106,7 +106,7 @@ void Map::AddKeyFrame(FrameRef frame) {
     // create new mappoint
     if (local_kfs.count(frame)) local_kfs.erase(frame);
     {
-        MyTimer::Timer _("Frame Triangulation");
+        MyTimer::Timer _("Trian");
         for (auto kf : local_kfs) {
             uint tri_left = TrangularizationTwoObject(kf->LEFT, frame->LEFT, kf, frame, kf->b, kf->u_right, frame->u_right);
             uint tri_wide = TrangularizationTwoObject(kf->WIDE, frame->WIDE, kf, frame, kf->b);
@@ -117,7 +117,7 @@ void Map::AddKeyFrame(FrameRef frame) {
     CullingMapppoints();
 
     {
-        MyTimer::Timer _("Local kf UpdateConnection");
+        MyTimer::Timer _("UpCon");
         Map::UpdateConnections(frame);
         for (auto kf : local_kfs) {
             Map::UpdateConnections(kf);
@@ -125,7 +125,7 @@ void Map::AddKeyFrame(FrameRef frame) {
     }
 
     {
-        MyTimer::Timer _("Local Fuse ");
+        MyTimer::Timer _("Fuse");
         // Find more matches in neighbor keyframes and fuse point duplications
 
         for (auto kf : local_kfs) {
@@ -138,11 +138,11 @@ void Map::AddKeyFrame(FrameRef frame) {
     // local ba
     if (frame->id != 0) {
         // Perform local ba
-        MyTimer::Timer _("Local BA");
-        local_kfs = GrabLocalMap_Mappoint(frame, 2);
+        MyTimer::Timer _("LBA");
+        local_kfs = GrabLocalMap_Mappoint(frame, 1);
         std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
         local_kfs.insert(frame);
-        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 30, &PoseEstimation::FilterCallBack_Chi2);
+        uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 10, &PoseEstimation::FilterCallBack_Chi2);
         fmt::print("[local ba] res {}  kfs {}, fix_kfs {}\n", op_cnt, local_kfs.size(), fix_local_kfs.size());
         for (const KeyFrame &kf : local_kfs) {
             Map::UpdateConnections(kf);
@@ -568,7 +568,7 @@ cv::Mat Map::ComputeF12(ObjectRef &rig1, ObjectRef &rig2) {
 
 std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
     std::vector<cv::Mat> ret;
-    for (std::tuple<cv::Mat, KeyFrame, bool> &p : trajectories) {
+    for (std::tuple<cv::Mat, KeyFrame, bool, double> &p : trajectories) {
         cv::Mat tf = std::get<0>(p);
         cv::Mat Tkf_w = std::get<1>(p)->GetPose();
         cv::Mat T_fi_world = tf * Tkf_w;
@@ -578,8 +578,15 @@ std::vector<cv::Mat> Map::GetAllKeyFrameForShow() {
 }
 std::vector<bool> Map::GetAllKeyFrameMaskForShow() {
     std::vector<bool> ret;
-    for (std::tuple<cv::Mat, KeyFrame, bool> &p : trajectories) {
+    for (std::tuple<cv::Mat, KeyFrame, bool, double> &p : trajectories) {
         ret.push_back(std::get<2>(p));
+    }
+    return ret;
+}
+std::vector<double> Map::GetAllKeyFrameTimeStamps() {
+    std::vector<double> ret;
+    for (std::tuple<cv::Mat, KeyFrame, bool, double> &p : trajectories) {
+        ret.push_back(std::get<3>(p));
     }
     return ret;
 }
@@ -786,6 +793,6 @@ std::unordered_set<KeyFrame> Map::GrabAnchorKeyFrames(std::unordered_set<KeyFram
     return kfs_anchor;
 }
 
-void Map::AddFramePose(cv::Mat Tcw, KeyFrame rkf, bool isKeyFrame) { trajectories.push_back({Tcw, rkf, isKeyFrame}); }
+void Map::AddFramePose(cv::Mat Tcw, KeyFrame rkf, double time_stamp, bool isKeyFrame) { trajectories.push_back({Tcw, rkf, isKeyFrame, time_stamp}); }
 
 }  // namespace MCVSLAM

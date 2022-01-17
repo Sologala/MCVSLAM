@@ -46,10 +46,10 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
             map->AddKeyFrame(cur_frame);
             SetLastKeyFrame(cur_frame);
             SetLastFrame(cur_frame);
-            {
-                cv::Mat T_cur_rfk = cur_frame->GetPoseInverse() * GetLastKeyFrame()->GetPose();
-                map->AddFramePose(T_cur_rfk, GetLastKeyFrame());
-            }
+            // {
+            //     cv::Mat T_cur_rfk = cur_frame->GetPoseInverse() * GetLastKeyFrame()->GetPose();
+            //     map->AddFramePose(T_cur_rfk, GetLastKeyFrame(), cur_frame->time_stamp);
+            // }
             state = Track_State::OK;
         } else {
             // init faild
@@ -64,9 +64,11 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
             // system has been initialized!
             if (velocity.empty() || (GetLastKeyFrame() && GetLastKeyFrame()->id + 5 >= cur_frame->id)) {
                 // track by bow with LastKeyFrame
-                MyTimer::Timer _("Track LastKeyFrame");
+                MyTimer::Timer _("TLastK");
+
                 uint cnt_l = Bow_Track(GetLastKeyFrame()->LEFT, cur_frame->LEFT);
                 uint cnt_w = Bow_Track(GetLastKeyFrame()->WIDE, cur_frame->WIDE);
+
                 cur_frame->SetPose(GetLastFrame()->GetPose());
                 int opcnt = PoseEstimation::PoseOptimization(cur_frame);
                 fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
@@ -77,10 +79,11 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
                 }
             } else if (!velocity.empty()) {
                 // track by MotionModel
-                MyTimer::Timer _("Track MotionModel");
+                MyTimer::Timer _("TMotion");
                 cur_frame->SetPose(velocity * GetLastFrame()->GetPose());
-
-                viewer->SetCurrentCamera(cur_frame->GetPose());
+                if (viewer) {
+                    viewer->SetCurrentCamera(cur_frame->GetPose());
+                }
 
                 auto lkfmps = GetLastKeyFrame()->LEFT->GetMapPoints();
                 auto lkfmps_wide = GetLastKeyFrame()->WIDE->GetMapPoints();
@@ -89,8 +92,10 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
                 int cnt = PoseEstimation::PoseOptimization(cur_frame);
                 _.tock();
                 // auto k = getchar();
-                viewer->SetCurrentCamera(cur_frame->GetPose());
 
+                if (viewer) {
+                    viewer->SetCurrentCamera(cur_frame->GetPose());
+                }
                 fmt::print("track MotionModel {} project left {} project wide  {}\n", cnt, pcnt, pcntw);
                 if (cnt < Th_motionmodel_min_mps) {
                     fmt::print("Track MotionModel Faild! \n");
@@ -116,13 +121,14 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
             // if (state == Track_State::OK)
             {
                 // track local map
-                MyTimer::Timer _("Track Local Map");
+                MyTimer::Timer _("TLocal");
                 auto local_kfs = map->GrabLocalMap_Mappoint(cur_frame, 3);
                 auto local_mps = map->GrabLocalMappoint(local_kfs, CAM_NAME::L);
                 auto local_mps_wide = map->GrabLocalMappoint(local_kfs, CAM_NAME::W);
                 uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(local_mps, 10);
                 uint pcnt_w = cur_frame->WIDE->ProjectBunchMapPoints(local_mps_wide, 7);
                 int opcnt = PoseEstimation::PoseOptimization(cur_frame);
+
                 fmt::print("[track local map]{}  {} kfs, {} mps,  project left {} wide {}\n", opcnt, local_kfs.size(), local_mps.size(), pcnt,
                            pcnt_w);
                 if (opcnt < 50) {
@@ -136,13 +142,13 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
         }
         if (state == Track_State::LOST) {
             // delete cur_frame;
-            this->Clear();
-            map->Clear();
+            // this->Clear();
+            // map->Clear();
             fmt::print("Track LOST with {} frame Please Press [q] key to exit\n", cur_frame->id);
-            while (getchar() != 'q')
-                ;
-            viewer->RequestStop();
-            exit(0);
+            // while (getchar() != 'q')
+            //     ;
+            if (viewer) viewer->RequestStop();
+            return Track_State::STOP;
         }
 
         // Calculate velocity
@@ -152,12 +158,14 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
 
         // Check if need new keyframe
         if (CheckNeedNewKeyFrame(cur_frame)) {
-            viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
-            viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
-            viewer->DrawPredictTracjectories(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
-            viewer->SetCurrentCamera(cur_frame->GetPose());
-            viewer->DrawEssentialGraph(map->GetEssentialGraph());
-            viewer->Commit();
+            if (viewer) {
+                viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
+                viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
+                viewer->DrawPredictTracjectories(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
+                viewer->SetCurrentCamera(cur_frame->GetPose());
+                viewer->DrawEssentialGraph(map->GetEssentialGraph());
+                viewer->Commit();
+            }
             // getchar();
             map->AddKeyFrame(cur_frame);
             SetLastKeyFrame(cur_frame);
@@ -174,20 +182,18 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
     // Commit this frame to the Trajectory
     {
         cv::Mat T_cur_rfk = cur_frame->GetPose() * GetLastKeyFrame()->GetPoseInverse();
-        map->AddFramePose(T_cur_rfk, GetLastKeyFrame(), GetLastKeyFrame() == cur_frame);
+        map->AddFramePose(T_cur_rfk, GetLastKeyFrame(), cur_frame->time_stamp, GetLastKeyFrame() == cur_frame);
+    }
+    if (viewer) {
+        // fmt::print("asdfasdfads");
+        viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
+        viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
+        viewer->DrawPredictTracjectories(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
+        viewer->SetCurrentCamera(cur_frame->GetPose());
+        viewer->DrawEssentialGraph(map->GetEssentialGraph());
+        viewer->Commit();
     }
 
-    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::L), 225, 0, 0);
-    viewer->Draw(map->GetAllMappointsForShow(CAM_NAME::W), 0, 225, 2);
-    viewer->DrawPredictTracjectories(map->GetAllKeyFrameForShow(), map->GetAllKeyFrameMaskForShow(), 0, 0, 225);
-    viewer->SetCurrentCamera(cur_frame->GetPose());
-    viewer->DrawEssentialGraph(map->GetEssentialGraph());
-    viewer->Commit();
-
-    fmt::print("{:^40}{:^20}{:^20}\n", "item", "time(ms)", "fps");
-    for (auto p : MyTimer::Timer::COUNT) {
-        fmt::print("{:^40}{:^20.6f}{:^20.6f}\n", p.first, p.second.ms(), p.second.fps());
-    }
     // char _ = getchar();
     return Track_State::OK;
 }
@@ -326,6 +332,36 @@ uint Tracker::Bow_Track(ObjectRef obj1, ObjectRef obj2) {
             cnt++;
         }
     }
+    return cnt;
+}
+
+uint Tracker::Wnd_Track(ObjectRef obj1, ObjectRef obj2) {
+    uint cnt = 0;
+    MatchRes allres;
+    for (uint idx : obj1->GetAllMapPointsIdxs()) {
+        cv::KeyPoint kp = obj1->kps[idx];
+        cv::Mat desp = obj1->desps.row(idx);
+        auto candi_idxs = obj2->GetFeaturesInArea(kp.pt, 20);
+        std::vector<cv::Mat> desps;
+        std::vector<cv::KeyPoint> kps;
+        for (uint idx_target : candi_idxs) {
+            desps.push_back(obj2->desps.row(idx_target));
+            kps.push_back(obj2->kps[idx_target]);
+        }
+        MatchRes t_res = Matcher::KnnMatch({desp}, desps).FilterRatio().FilterThreshold().FilterOrientation({kp}, kps);
+        if (t_res.size()) {
+            allres.push_back(cv::DMatch(idx, candi_idxs[t_res[0].queryIdx], t_res[0].distance));
+            obj2->AddMapPoint(obj1->GetMapPoint(idx), candi_idxs[t_res[0].queryIdx]);
+            cnt++;
+        }
+    }
+    // if (allres.size()) {
+    //     cv::Mat outimg;
+    //     cv::drawMatches(obj1->img, obj1->kps, obj2->img, obj2->kps, allres, outimg);
+    //     fmt::print("{}\n", cnt);
+    //     cv::imshow("img", outimg);
+    //     cv::waitKey(0);
+    // }
     return cnt;
 }
 

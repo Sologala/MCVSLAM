@@ -1,11 +1,11 @@
-nkeypoints: 1500
+nkeypoints: 2000
 scale_factor: 1.2
-nlevels: 3
+nlevels: 1
 
 
 # ORB Extractor: Fast threshold
 # Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
 # Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
 # 降低Fast的阈值可以增多点的数量，对于纯平面场景有提高效果。
-ORBextractor.iniThFAST: 20
-ORBextractor.minThFAST: 7
+ORBextractor.iniThFAST: 28
+ORBextractor.minThFAST: 15

@@ -25,7 +25,7 @@ using ObjectRef = std::shared_ptr<Object>;
 class Map {
    public:
     Map(std::string config_file);
-    ~Map(){};
+    ~Map() { this->Clear(); };
     static uint cnt_kf, used_kf, cnt_mp, used_mp;
     MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name);
     MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name);
@@ -52,6 +52,9 @@ class Map {
     std::vector<cv::Mat> GetAllMappointsForShow(CAM_NAME cam_name);
     std::vector<cv::Mat> GetAllKeyFrameForShow();
     std::vector<bool> GetAllKeyFrameMaskForShow();
+
+    std::vector<double> GetAllKeyFrameTimeStamps();
+
     std::vector<std::pair<cv::Mat, cv::Mat>> GetEssentialGraph();
     int MapPointSize();
     int KeyFrameSize();
@@ -73,7 +76,7 @@ class Map {
     std::unordered_set<KeyFrame> GrabAnchorKeyFrames(std::unordered_set<KeyFrame> &kfs);
 
     // Tracjtory
-    void AddFramePose(cv::Mat Tcw, KeyFrame rkf, bool isKeyFrame = false);
+    void AddFramePose(cv::Mat Tcw, KeyFrame rkf, double time_stamp, bool isKeyFrame = false);
 
    public:
     std::unordered_set<MapPointRef> all_mappoints;
@@ -98,7 +101,7 @@ class Map {
     std::deque<MapPointRef> recent_created_mps;
 
     // Tracjtory    [tracking ]
-    std::vector<std::tuple<cv::Mat, KeyFrame, bool>> trajectories;
+    std::vector<std::tuple<cv::Mat, KeyFrame, bool, double>> trajectories;
 };
 
 }  // namespace MCVSLAM

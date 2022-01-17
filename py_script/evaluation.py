@@ -79,7 +79,7 @@ def APE(tracj, gt):
 # fig.canvas.flush_events()
 
 
-def sub_callback(data):
+def pose_sub_callback(data):
     # print(data.poses.position)
 
     tracj = []
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     ros_thread = Thread(target=ros_loop)
     rospy.init_node('talker', anonymous=True)
     sub = rospy.Subscriber("MCVSLAM/tracj", PoseArray,
-                           callback=sub_callback)
+                           callback=pose_sub_callback)
     ros_thread.start()
 
     if axs == None:

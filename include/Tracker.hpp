@@ -14,6 +14,7 @@ enum Track_State {
     LOST = 1,
     INIT_FAILD = 3,
     TRACK_FAILD = 2,
+    STOP = 4,
 };
 class Tracker {
    public:
@@ -25,7 +26,7 @@ class Tracker {
 
     void Clear();
     uint Bow_Track(ObjectRef obj1, ObjectRef obj2);
-
+    uint Wnd_Track(ObjectRef obj1, ObjectRef obj2);
     std::vector<KeyFrame> GetLastKeyFrame(uint cnt);
     KeyFrame GetLastKeyFrame();
     FrameRef GetLastFrame();

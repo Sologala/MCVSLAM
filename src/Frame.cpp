@@ -51,9 +51,9 @@ uint KL_Track(ObjectRef obj1, ObjectRef obj2, unordered_map<MapPointRef, uint> &
     std::vector<uchar> res;
     std::vector<float> err;
 
-    cv::Size winSize = cv::Size(21, 21);
-    cv::TermCriteria termcrit = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
-    calcOpticalFlowPyrLK(obj1->img, obj2->img, pts, next_pts, res, err, winSize, 3, termcrit, 0, 0.001);
+    cv::Size winSize = cv::Size(10, 10);
+    cv::TermCriteria termcrit = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 10, 0.01);
+    calcOpticalFlowPyrLK(obj1->img, obj2->img, pts, next_pts, res, err, winSize, 1, termcrit, 0, 0.001);
 
     uint cnt = 0;
     for (uint i = 0, sz = res.size(); i < sz; i++) {
@@ -88,7 +88,7 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     mp2idx_wide.clear();
     {
         // KL Track
-        MyTimer::Timer _("KL Track");
+        MyTimer::Timer _("KL");
         std::vector<FrameRef> all_frames(optical_flow_frams.begin(), optical_flow_frams.end());
         static auto cmp_frame = [](const FrameRef &a, const FrameRef &b) { return a->id > b->id; };
         sort(all_frames.begin(), all_frames.end(), cmp_frame);
@@ -116,7 +116,7 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     }
 
     {
-        MyTimer::Timer _("ORB_EXTRACT");
+        MyTimer::Timer _("ORBE");
         auto res_left = pool.enqueue(extractORB, LEFT, &extractor_left);
         auto res_right = pool.enqueue(extractORB, RIGHT, &extractor_right);
         auto res_wide = pool.enqueue(extractORB, WIDE, &extractor_wide);
@@ -132,7 +132,7 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
     depth_left.resize(LEFT->size(), -1);
 
     {
-        MyTimer::Timer _("Stereo Matching");
+        MyTimer::Timer _("SMatch");
         ComputeStereoMatch(LEFT, RIGHT);
     }
 }
@@ -222,7 +222,7 @@ void Frame::ComputeStereoMatch(ObjectRef left, ObjectRef right) {
         // std::cout << right_desps[0] << std::endl;
         // std::cout << cv::Mat(right_desps) << endl;
         MatchResKnn res_knn = Matcher::KnnMatch(left_desps, right_desps, 2);
-        MatchRes res = res_knn.FilterRatio(0.66).FilterThreshold();
+        MatchRes res = res_knn.FilterRatio(0.70).FilterThreshold(ORB_GOOD_THRESHOLD * 0.75);
 
         // Subpixel match by correlation
         for (cv::DMatch &m : res) {
@@ -355,10 +355,10 @@ int Frame::Parse(const std::string &config_file) {
     temp = root["Twl"].AsVector<float>();
     assert(temp.size() == 16);
     Twl = cv::Mat(temp).reshape(1, 4).clone();
-    string cur_folder = config_file.substr(0, config_file.find_last_of('/'));
-    extractor_left = ORB(cur_folder + "/" + root["left_extractor_path"].As<string>());
-    extractor_right = ORB(cur_folder + "/" + root["right_extractor_path"].As<string>());
-    extractor_wide = ORB(cur_folder + "/" + root["wide_extractor_path"].As<string>());
+
+    extractor_left = ORB(root["left_extractor_path"].AsPath());
+    extractor_right = ORB(root["right_extractor_path"].AsPath());
+    extractor_wide = ORB(root["wide_extractor_path"].AsPath());
     Object::voc.load(root["bow_vocabulary_path"].As<string>());
     return 0;
 }

@@ -246,6 +246,7 @@ void osg_viewer::Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b) {
     geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));  // X
     osg::ref_ptr<osg::Geode> geode = new osg::Geode();
     geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    fmt::print("size : {}\n", mappoint_size);
     geode->getOrCreateStateSet()->setAttribute(new osg::Point(mappoint_size), osg::StateAttribute::ON);
     geode->addDrawable(pShapeDrawable.get());
     geode->addDrawable(geom.get());

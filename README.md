@@ -66,23 +66,34 @@ Currently, I am mainly use it to build a convinent platform for accomplish my th
 
 2000 ORB feature points in each image, running on i7-9700 with single thread.
 
-```shell
-        item              time(ms)              fps         
-      Local BA           169.727319           5.891800      
- Track MotionModel        6.184962           161.679858     
-  Track Local Map        26.733954           37.405476      
-    ORB_EXTRACT           6.437734           155.331754     
-  Stereo Matching        23.619861           42.337073      
-Frame Triangulation      34.983119           28.585134      
-Local kf UpdateConnection      5.755037           173.757820     
-    Local Fuse           22.248238           44.947178      
- Track LastKeyFrame      16.244335           61.559545  
+![](./.readme/time_cost.jpg)
+
+# Evaluation Results
 ```
+RPE w.r.t. translation part (m)
+for delta = 1 (frames) using consecutive pairs
+(with SE(3) Umeyama alignment)
 
+       max      0.266661
+      mean      0.064595
+    median      0.053899
+       min      0.004208
+      rmse      0.078455
+       sse      6.179843
+       std      0.044528
 
+APE w.r.t. translation part (m)
+(with SE(3) Umeyama alignment)
 
-
-
+       max      0.823292
+      mean      0.408878
+    median      0.383366
+       min      0.080387
+      rmse      0.430832
+       sse      186.544597
+       std      0.135776
+```
+# Demo 
 ![](./.readme/demo.gif)
 
 ![](./.readme/align_result.png)

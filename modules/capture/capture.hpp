@@ -17,7 +17,7 @@ class Capture {
     Capture(const int &_camId);
     ~Capture();
 
-    bool get(cv::Mat &img);
+    int get(cv::Mat &img);
     void reset();
     static CaptureConfig global_capture_config;
 
@@ -51,6 +51,7 @@ class CaptureConfig {
     int capture_cnt;
     double percent;
     bool frame_by_frame = false;
+    bool loop = false;
     std::vector<capture_info> caps;
 };
 

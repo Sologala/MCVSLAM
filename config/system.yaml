@@ -1,3 +1,7 @@
+
+
+use_viewer: false
+
 connection_threshold: 30
 mappoint_life_span: 7
 
@@ -8,3 +12,17 @@ Th_motionmodel_min_mps: 40
 Th_local_map_min_mps: 50
 Th_lastkeyframe_min_mps: 50
 Th_max_frame_interval: 15
+
+
+
+# sub module config files 
+
+viewer_config_path: "${CURRENT_FOLDER}/viewer.yaml"
+frame_config_path: "${CURRENT_FOLDER}/frame.yaml"
+camera_left_config_path: "${CURRENT_FOLDER}/camleft.yaml"
+camera_wide_config_path: "${CURRENT_FOLDER}/camwide.yaml"
+
+
+# tracjtory save path 
+tracj_save_file: "./trajectory.txt"
+

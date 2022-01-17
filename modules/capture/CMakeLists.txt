@@ -30,5 +30,5 @@ target_link_libraries(
     capture
     pyp::yaml
     pyp::fmt
-    ros_msg
+    # ros_msg
 )

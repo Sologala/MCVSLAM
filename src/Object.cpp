@@ -223,10 +223,9 @@ uint Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, f
         bool project_res = false;
 
         if (_desps.size()) {
-            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio(0.65).FilterThreshold();
+            MatchRes res = Matcher::KnnMatch({mp->GetDesp()}, _desps).FilterRatio().FilterThreshold();
             if (res.size()) {
                 AddMapPoint(mp, _ori_idx[res[0].trainIdx]);
-                mp->ProjectResRecord(true);
                 project_res = true;
                 cnt += 1;
             }
