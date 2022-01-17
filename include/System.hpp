@@ -33,7 +33,6 @@ class System {
 
     Pinhole *cam_left = nullptr, *cam_right = nullptr, *cam_wide = nullptr;
 
-   private:
     std::string config_file;
     std::string tracj_save_file;
 
