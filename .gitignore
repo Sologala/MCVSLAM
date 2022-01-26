@@ -24,7 +24,6 @@ third_repos
 
 # Compiled Dynamic libraries
 *.so
-!librknn_api.so
 
 
 *.dylib
@@ -53,5 +52,6 @@ app/*
 ./app/
 .AppleDouble/
 data
-
+!ThirdParty/g2o/g2o/types/data
 ThirdParty/installed
+data
