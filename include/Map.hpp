@@ -22,13 +22,18 @@ using KeyFrame = FrameRef;
 using MapPointRef = std::shared_ptr<MapPoint>;
 using ObjectRef = std::shared_ptr<Object>;
 
+enum MP_TYPE {
+    STEREO,
+    TRIANGLE,
+};
+
 class Map {
    public:
     Map(std::string config_file);
     ~Map() { this->Clear(); };
     static uint cnt_kf, used_kf, cnt_mp, used_mp;
-    MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name);
-    MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name);
+    MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type);
+    MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type);
 
     FrameRef CreateFrame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_stamp, BaseCamera *cam_left, BaseCamera *cam_right,
                          BaseCamera *cam_wide, const std::vector<FrameRef> &optical_flow_frams);

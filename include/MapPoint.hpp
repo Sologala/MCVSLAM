@@ -21,10 +21,9 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     friend class Map;
 
    public:
-    MapPoint(double x, double y, double z, cv::Mat _desp, uint _level, uint _kf_id, uint _id, CAM_NAME _created_from, uint _life_span);
+    MapPoint(double x, double y, double z, cv::Mat _desp, uint _level, uint _kf_id, uint _id, CAM_NAME _created_from, MP_TYPE _type, uint _life_span);
 
     ~MapPoint();
-
     const cv::Mat GetWorldPos();
     void SetWorldPose(const cv::Mat& pos);
 
@@ -51,6 +50,8 @@ class MapPoint : public std::enable_shared_from_this<MapPoint> {
     float GetProjectSucessRate();
 
    public:
+    MP_TYPE type;
+
     // Position in absolute coordinates
     cv::Mat position_w;
     // historical position

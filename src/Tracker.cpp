@@ -304,7 +304,8 @@ uint Tracker::Init(KeyFrame &cur_frame) {
         if (depth != -1) {
             cv::Mat mp = cur_frame->LEFT->mpCam->unproject_z(kp.pt, depth);
             // cout << mp << endl;
-            auto mpr = map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->LEFT->kps[i].octave, cur_frame->id, CAM_NAME::L);
+            auto mpr =
+                map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->LEFT->kps[i].octave, cur_frame->id, CAM_NAME::L, MP_TYPE::STEREO);
             cur_frame->LEFT->AddMapPoint(mpr, i);
             mpr->ProjectResRecord(true);
             cnt += 1;

@@ -29,17 +29,17 @@ Map::Map(std::string config_file) {
     mappoint_life_span = root["mappoint_life_span"].As<int>();
 }
 
-MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name) {
+MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type) {
     // MapPoint* mp = new MapPoint(x, y, z, _desp, mp_id++);
     // MapPointRef ret = std::shared_ptr<MapPoint>(mp);
     cnt_mp += 1;
-    return make_shared<MapPoint>(x, y, z, _desp, _level, kf_id, mp_id++, cam_name, mappoint_life_span);
+    return make_shared<MapPoint>(x, y, z, _desp, _level, kf_id, mp_id++, cam_name, type, mappoint_life_span);
 }
 
-MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name) {
+MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type) {
     assert(!xyz.empty() && xyz.rows == 3);
 
-    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, _level, kf_id, cam_name);
+    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, _level, kf_id, cam_name, type);
     recent_created_mps.push_back(ref);
     return ref;
 }
@@ -86,7 +86,7 @@ void Map::AddKeyFrame(FrameRef frame) {
         if (ned_create) {
             cv::Mat Pc = frame->LEFT->mpCam->unproject_z(frame->LEFT->kps[i].pt, z);
             cv::Mat Pw = frame->LEFT->GetRotation().t() * Pc + frame->LEFT->GetCameraCenter();
-            MapPointRef new_mp = CreateMappoint(Pw, frame->LEFT->desps.row(i), frame->LEFT->kps[i].octave, frame->id, CAM_NAME::L);
+            MapPointRef new_mp = CreateMappoint(Pw, frame->LEFT->desps.row(i), frame->LEFT->kps[i].octave, frame->id, CAM_NAME::L, MP_TYPE::STEREO);
             new_mp->BindKeyFrame(frame, frame->LEFT);
             new_mp->ComputeDistinctiveDescriptors();
             new_mp->UpdateNormalVector();
@@ -362,6 +362,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
         cosParallaxStereo = min(cosParallaxStereo1, cosParallaxStereo2);
 
         cv::Mat x3D;
+        MP_TYPE x3d_type = MP_TYPE::STEREO;
         if (cosParallaxRays < cosParallaxStereo && cosParallaxRays > 0 && (bStereo1 || bStereo2 || (cosParallaxRays < 0.9998))) {
             // Linear Triangulation Method
             cv::Mat A(4, 4, CV_32F);
@@ -379,6 +380,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
             // Euclidean coordinates
             x3D = x3D.rowRange(0, 3) / x3D.at<float>(3);
+            x3d_type = MP_TYPE::TRIANGLE;
         } else if (bStereo1 && cosParallaxStereo1 < cosParallaxStereo2) {
             x3D = obj1->mpCam->unproject_z(kp1.pt, kf1->depth_left[m.queryIdx]);
         } else if (bStereo2 && cosParallaxStereo2 < cosParallaxStereo1) {
@@ -456,7 +458,7 @@ int Map::TrangularizationTwoObject(ObjectRef obj1, ObjectRef obj2, KeyFrame kf1,
 
         // Triangulation is succesfull
 
-        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), obj2->kps[m.trainIdx].octave, kf2->id, obj2->name);
+        MapPointRef new_mp = CreateMappoint(x3D, obj2->desps.row(m.trainIdx), obj2->kps[m.trainIdx].octave, kf2->id, obj2->name, x3d_type);
         obj1->AddMapPoint(new_mp, m.queryIdx);
         obj2->AddMapPoint(new_mp, m.trainIdx);
 
