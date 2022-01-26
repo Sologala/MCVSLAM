@@ -52,6 +52,6 @@ __pycache__
 app/*
 ./app/
 .AppleDouble/
-ThirdParty/*
 data
 
+ThirdParty/installed
