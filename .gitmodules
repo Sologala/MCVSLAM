@@ -1,0 +1,3 @@
+[submodule "ThirdParty/vision_opencv"]
+	path = ThirdParty/vision_opencv
+	url = https://github.com/ros-perception/vision_opencv.git
