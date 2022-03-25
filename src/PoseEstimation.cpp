@@ -124,7 +124,7 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
         frame->SetPose(op.eval(frame));
     }
 
-    op.DumpHessian("asad");
+    op.DumpCalculationGraph("asad");
 
     return nInitialCorrespondences - nBad;
 }

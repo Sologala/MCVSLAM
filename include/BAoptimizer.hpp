@@ -46,7 +46,7 @@ class BAoptimizer : public g2o::SparseOptimizer {
 
     void optimize(const int n);
 
-    void DumpHessian(const std::string &file_name);
+    void DumpCalculationGraph(const std::string &file_name);
 
     cv::Mat eval(const KeyFrame &kf);
     cv::Mat eval(const MapPointRef &mp);

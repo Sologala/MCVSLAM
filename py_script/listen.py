@@ -1,5 +1,7 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import os
+
+from sklearn.preprocessing import scale
 from rospy.core import is_shutdown
 from threading import Lock, Thread
 import threading
@@ -34,24 +36,36 @@ class Listener:
             data = self.data_queue.get()
             self.draw_callback(self.axs, data)
 
-
-def APE(axs, tracj, gt):
+def calError(axs, tracj, gt, method = "RPE"):
+    if (len(tracj)  < 2): return
     Errors = []
-    for p1, p2 in zip(tracj, gt):
-        p1[0] *= -1
-        err = np.abs(p1 - p2)
-        Errors.append(err)
+    if method == "APE":
+        for p1, p2 in zip(tracj, gt):
+            err = np.abs(p1 - p2)
+            Errors.append(err)
+    elif method == "RPE":
+        _interval = 10
+        for i in range(1, len(tracj)):
+            t0, t1 = tracj[i- 1], tracj[i]
+            g0, g1 = gt[i- 1], gt[i]
+            err = np.abs((t1 - t0) - (g1 - g0))
+            # print(t1 - t0, g1 - g0, err)
+            Errors.append(err)
+    else:
+        print("Non-support error method")
+        return None
 
     Errors = np.array(Errors)
     # drew xyz
     errs = np.linalg.norm(Errors, axis=1)
+    plt.autoscale(enable=True, axis='y')
     axs[0].cla()
     axs[0].plot(errs)
     axs[0].set_title("xyz err")
     means = np.mean(errs)
-    axs[0].text(0, 1.2, "{:.6f}".format(means))
+    ylim_ = axs[0].get_ylim()[-1]
+    axs[0].text(0, ylim_ * 0.9, "{:.6f}".format(means))
     axs[0].axhline(y=means, color="red")
-    axs[0].set_ylim((0, 1.5))
 
     # drew xy
     errs = np.linalg.norm(Errors[:, :1], axis=1)
@@ -59,9 +73,9 @@ def APE(axs, tracj, gt):
     axs[1].plot(errs)
     axs[1].set_title("xy plane err")
     means = np.mean(errs)
-    axs[1].text(0, 1.2, "{:.6f}".format(means))
+    ylim_ = axs[1].get_ylim()[-1]
+    axs[1].text(0, ylim_ * 0.9, "{:.6f}".format(means))
     axs[1].axhline(y=means, color="red")
-    axs[1].set_ylim((0, 1.5))
 
     # drew z
     errs = Errors[:, 2]
@@ -69,9 +83,9 @@ def APE(axs, tracj, gt):
     axs[2].plot(errs)
     axs[2].set_title("z err")
     means = np.mean(errs)
-    axs[2].text(0, 1.2, "{:.6f}".format(means))
+    ylim_ = axs[2].get_ylim()[-1]
+    axs[2].text(0, ylim_ * 0.9, "{:.6f}".format(means))
     axs[2].axhline(y=means, color="red")
-    axs[2].set_ylim((0, 1.5))
 
 
 def pose_draw_callback(axs, data):
@@ -83,7 +97,11 @@ def pose_draw_callback(axs, data):
         t = [pose.position.x, pose.position.y, pose.position.z]
         tracj.append(t)
     gt = tracj_gt[: len(tracj)].copy()
-    APE(axs, tracj, gt)
+    tracj, gt = np.array(tracj), np.array(gt)
+
+    # 修正 tracj的 x 坐标
+    tracj[:,0] *= -1
+    calError(axs, tracj, gt, method = "RPE")
 
 
 def time_cost_draw_callback(axs, data):

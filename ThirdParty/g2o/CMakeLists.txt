@@ -171,6 +171,9 @@ endif()
 find_package(QGLViewer)
 
 # shall we build the core apps using the library
+
+set(G2O_BUILD_APPS 1)
+
 set(G2O_BUILD_APPS ON CACHE BOOL "Build g2o apps")
 if(G2O_BUILD_APPS)
   message(STATUS "Compiling g2o apps")

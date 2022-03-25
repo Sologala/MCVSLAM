@@ -113,32 +113,9 @@ void BAoptimizer::optimize(const int n) {
     g2o::SparseOptimizer::optimize(n);
 }
 
-void BAoptimizer::DumpHessian(const std::string &file_name) {
-    std::unordered_set<uint> saw_dimensions;
-    for (auto p : KF2ID) {
-        uint kf_id = p.second;
-        g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(vertex(kf_id));
-        saw_dimensions.insert(vSE3->dimension());
-        // dimension 6x6
-        cv::Mat mat(6, 6, CV_32F, vSE3->hessianData());
-        vSE3->hessianIndex();
-        std::cout << mat << std::endl;
-        break;
-    }
-    for (auto n : saw_dimensions) {
-        std::cout << n << " ";
-    }
-    std::cout << std::endl;
-    saw_dimensions.clear();
-    for (auto p : MP2ID) {
-        uint mp_id = p.second;
-        g2o::VertexSBAPointXYZ *vPoint = static_cast<g2o::VertexSBAPointXYZ *>(vertex(mp_id));
-        saw_dimensions.insert(vPoint->dimension());
-    }
-    for (auto n : saw_dimensions) {
-        std::cout << n << " ";
-    }
-    std::cout << std::endl;
+void BAoptimizer::DumpCalculationGraph(const std::string &file_name) {
+    // 只保存了 HPP矩阵。
+    solver->dump(file_name);
 }
 
 cv::Mat BAoptimizer::eval(const KeyFrame &kf) {

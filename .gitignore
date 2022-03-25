@@ -55,3 +55,9 @@ data
 !ThirdParty/g2o/g2o/types/data
 ThirdParty/installed
 data
+
+notebook/*.npy
+notebook/*.voc
+notebook/image-features/*.npy
+notebook/list.txt
+notebook/vis_images.txt

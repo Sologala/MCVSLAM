@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 2.6)
 
 add_subdirectory(stuff)
 add_subdirectory(core)
-
-if(G2O_BUILD_APPS)
+# add_definitions(G2O_BUILD_APPS 1)
+# if(G2O_BUILD_APPS)
   add_subdirectory(apps)
-endif(G2O_BUILD_APPS)
+# endif(G2O_BUILD_APPS)
 
 # Pre-canned types
 add_subdirectory(types)

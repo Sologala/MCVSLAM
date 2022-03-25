@@ -12,4 +12,4 @@ Capture1.VideoPath: "/home/wen/SLAM/Datasets/data/right/*.png"
 Capture1.topic: "right/image"
 
 Capture2.VideoPath: "/home/wen/SLAM/Datasets/data/wide/*.png"
-Capture2.topic: "wide/image"
+Capture2.topic: "wide/image" 
