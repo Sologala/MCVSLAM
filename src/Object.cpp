@@ -2,6 +2,7 @@
 
 #include <pyp/fmt/core.h>
 
+#include <boost/thread/lock_types.hpp>
 #include <cstddef>
 #include <opencv2/core.hpp>
 #include <opencv2/core/types.hpp>
@@ -29,25 +30,27 @@ Object::Object(MCVSLAM::BaseCamera *_cam, cv::Mat _img, ORB *_extractor, CAM_NAM
 
 size_t Object::GetMapPointIdx(MapPointRef pMP) {
     if (pMP == NULL) {
-        fmt::print("NULL pMP \n");
-        throw std::runtime_error("NULL pMP");
+        // fmt::print("NULL pMP \n");
+        return -1;
     }
-    WRITELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     //	data_check();
     if (mMP2IDX.count(pMP) == 0) {
-        cout << all_mps.count(pMP) << endl;
-        throw std::runtime_error("Not exist");
+        // cout << all_mps.count(pMP) << endl;
+        // throw ObjectException("Not exist");
+        return -1;
     }
 
     size_t idx = mMP2IDX[pMP];
     if (mIDX2MP.count(idx) == 0 || mIDX2MP[idx] != pMP) {
-        throw std::runtime_error("Info not correct ");
+        // throw ObjectException("Info not correct ");
+        return -1;
     }
     return idx;
 }
 
 MapPointRef Object::GetMapPoint(size_t idx) {
-    WRITELOCK lock(mtx_mps);
+    READLOCK lock(mtx_mps);
     if (idx >= size()) return NULL;
     //	data_check();
 
@@ -59,7 +62,8 @@ MapPointRef Object::GetMapPoint(size_t idx) {
     MapPointRef pMP = mIDX2MP[idx];
     if (mMP2IDX[pMP] != idx) {
         cout << mMP2IDX[pMP] << endl;
-        throw std::runtime_error("Info not correct ");
+        // throw ObjectException("Info not correct ");
+        return NULL;
     }
     return pMP;
 }
@@ -111,6 +115,7 @@ uint Object::Covisibility(const ObjectRef &other) {
 #define MAPPOINT_STRATEGY_FORCE
 
 void Object::AddMapPoint(MapPointRef pMP, size_t idx) {
+    if (pMP == nullptr) return;
     DelMapPoint(pMP);
     DelMapPoint(idx);
 
@@ -143,6 +148,7 @@ void Object::ReplaceMapPoint(MapPointRef mp1, MapPointRef mp2) {
     if (mp1->id == mp2->id) return;
     if (count(mp1) == false) return;
     uint idx = GetMapPointIdx(mp1);
+    if (idx == -1) return;
     DelMapPoint(mp1);
     AddMapPoint(mp2, idx);
 }

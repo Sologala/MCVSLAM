@@ -2,6 +2,8 @@
 #define MAP_H
 #include <deque>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -10,7 +12,7 @@
 #pragma once
 #include "BaseCamera.hpp"
 #include "osg_viewer.hpp"
-
+#include "thread_queue.hpp"
 namespace MCVSLAM {
 class MapPoint;
 class Frame;
@@ -30,7 +32,7 @@ enum MP_TYPE {
 class Map {
    public:
     Map(std::string config_file);
-    ~Map() { this->Clear(); };
+    ~Map();
     static uint cnt_kf, used_kf, cnt_mp, used_mp;
     MapPointRef CreateMappoint(double x, double y, double z, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type);
     MapPointRef CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type);
@@ -83,7 +85,25 @@ class Map {
     // Tracjtory
     void AddFramePose(cv::Mat Tcw, KeyFrame rkf, double time_stamp, bool isKeyFrame = false);
 
+    // thread of process about local mappint
+    void RequestStop();
+    bool IsStoped();
+    void Run();
+
+   private:
+    // thread of process about local mappint
+    void Stop();
+    bool IsRequestStop();
+    // thread variables
+    bool is_stop = false;
+    bool is_req_stop = false;
+    mutable std::mutex mtx_stop;
+    std::thread *pworker;
+    void LocalMapping();
+
    public:
+    // keyframe gragh
+    // boost::shared_mutex mtx_map;
     std::unordered_set<MapPointRef> all_mappoints;
     std::unordered_set<KeyFrame> all_keyframes;
 
@@ -93,7 +113,7 @@ class Map {
     uint frame_id = 0;
 
     // keyframe gragh
-    boost::shared_mutex mtx_connection;
+    boost::shared_mutex mtx_map;
     std::unordered_map<KeyFrame, std::unordered_set<KeyFrame>> essential_gragh;
     std::unordered_map<KeyFrame, KeyFrame> parent_kf;
     std::unordered_map<KeyFrame, std::unordered_set<KeyFrame>> loop_kfs;
@@ -102,8 +122,13 @@ class Map {
     uint connection_threshold;
     uint mappoint_life_span;
 
-    // recent_created_mappoints , need to check if those mappoing is ok.
+    // recent_created_mappoints , need to check if those mappoint is ok.
+
+    boost::mutex mtx_recent_mps;
     std::deque<MapPointRef> recent_created_mps;
+
+    boost::mutex mtx_recent_kfs;
+    std::deque<FrameRef> recent_added_kfs;
 
     // Tracjtory    [tracking ]
     std::vector<std::tuple<cv::Mat, KeyFrame, bool, double>> trajectories;

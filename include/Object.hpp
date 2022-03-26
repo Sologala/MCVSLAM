@@ -3,6 +3,7 @@
 
 #include <boost/thread.hpp>
 #include <boost/thread/pthread/mutex.hpp>
+#include <exception>
 #include <memory>
 #include <opencv2/core/types.hpp>
 #include <unordered_set>
@@ -29,6 +30,12 @@ static unsigned int FRAME_GRID_COLS = 30;
 class Grid : public std::vector<std::vector<std::vector<std::size_t>>> {
    public:
     Grid() { resize(FRAME_GRID_COLS, std::vector<std::vector<std::size_t>>(FRAME_GRID_ROWS)); }
+};
+
+class ObjectException : public std::exception {
+   public:
+    ObjectException(const std::string &s = "null exception") {}
+    ~ObjectException(){};
 };
 
 class Object {
@@ -107,20 +114,21 @@ class Object {
 
     std::vector<MapPointRef> GetMapPointsVector() {
         std::vector<MapPointRef> ret;
-        {
-            READLOCK lock(mtx_mps);
-            ret.assign(all_mps.begin(), all_mps.end());
-        }
+        READLOCK lock(mtx_mps);
+        ret.assign(all_mps.begin(), all_mps.end());
         return ret;
     }
 
     std::unordered_set<MapPointRef> GetMapPoints() {
+        std::unordered_set<MapPointRef> ret;
         READLOCK lock(mtx_mps);
+        ret = all_mps;
         return all_mps;
     }
+
     std::unordered_set<MapPointRef> GetMapPoints(uint th_obs) {
-        READLOCK lock(mtx_mps);
         std::unordered_set<MapPointRef> ret;
+        READLOCK lock(mtx_mps);
         for (auto &mp : all_mps) {
             if (mp->GetObservationCnt() >= th_obs) ret.insert(mp);
         }
@@ -134,6 +142,7 @@ class Object {
         }
         return ret;
     }
+
     size_t GetMapPointIdx(MapPointRef pMP);
 
     MapPointRef GetMapPoint(size_t idx);
@@ -176,6 +185,7 @@ class Object {
 
    protected:
     boost::shared_mutex mtx_mps;
+
     boost::shared_mutex mtx_pose;  // for pose
 
    public:

@@ -29,6 +29,7 @@ MCVSLAM::System::System(const std::string& _config_file) : config_file(_config_f
     cam_right = cam_left;
     cam_wide = new Pinhole(root["camera_wide_config_path"].AsPath());
     map = new Map(config_file);
+    map->Run();
     tracker = new Tracker(map, viewer, config_file);
     Frame::Parse(root["frame_config_path"].AsPath());
 
@@ -48,6 +49,10 @@ MCVSLAM::System::~System() {
         delete viewer;
     }
     tracker->Clear();
+    map->RequestStop();
+    while (map->IsStoped() == false) {
+        usleep(1);
+    }
     map->Clear();
     delete cam_left;
     delete cam_wide;
@@ -58,6 +63,7 @@ MCVSLAM::System::~System() {
 }
 
 void MCVSLAM::System::Track(const std::vector<cv::Mat>& imgs, const double time_stmap) {
+    MyTimer::Timer _("Track");
     std::vector<cv::Mat> imggrays(3);
     for (int i = 0, sz = imgs.size(); i < sz; i++) {
         cv::cvtColor(imgs[i], imggrays[i], cv::COLOR_BGR2GRAY);

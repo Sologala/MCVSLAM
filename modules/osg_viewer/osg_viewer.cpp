@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <boost/thread/lock_types.hpp>
 #include <boost/thread/pthread/mutex.hpp>
+#include <exception>
 #include <memory>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
@@ -45,6 +46,7 @@
 #include <osgText/Text>
 #include <osgViewer/Scene>
 #include <osgViewer/Viewer>
+#include <stdexcept>
 #include <thread>
 #include <tuple>
 
@@ -178,7 +180,10 @@ void osg_viewer::Run() {
     // clear node_cloud_points when launch threads.
 
     while (1) {
-        viewer->frame();
+        try {
+            viewer->frame();
+        } catch (std::runtime_error &e) {
+        }
         // float x = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[0];
         // float y = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[1];
         // float z = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[2];
@@ -246,7 +251,7 @@ void osg_viewer::Draw(const std::vector<cv::Mat> mps, uint r, uint g, uint b) {
     geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS, 0, v->size()));  // X
     osg::ref_ptr<osg::Geode> geode = new osg::Geode();
     geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    fmt::print("size : {}\n", mappoint_size);
+
     geode->getOrCreateStateSet()->setAttribute(new osg::Point(mappoint_size), osg::StateAttribute::ON);
     geode->addDrawable(pShapeDrawable.get());
     geode->addDrawable(geom.get());
@@ -328,7 +333,7 @@ void osg_viewer::DrawPredictTracjectories(const std::vector<cv::Mat> &Tcws, cons
     for (uint i = 0, sz = Tcws.size(); i < sz; i++) {
         DrawCam(Tcws[i], mask[i], r, g, b);
     }
-    // if (Tcws.size()) SetCurViewFollow(Tcws.back());
+    if (Tcws.size()) SetCurViewFollow(Tcws.back());
 }
 
 void osg_viewer::SetCurrentCamera(const cv::Mat Tcw) {

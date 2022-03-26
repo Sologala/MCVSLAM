@@ -1,6 +1,6 @@
 
 
-use_viewer: false
+use_viewer: true
 
 connection_threshold: 30
 mappoint_life_span: 7

@@ -28,7 +28,8 @@ const cv::Mat MapPoint::GetWorldPos() {
 
 void MapPoint::SetWorldPose(const cv::Mat &pos) {
     WRITELOCK _lock(mtx_pos);
-    position_w = pos.clone();
+    // position_w = pos.clone();
+    pos.copyTo(position_w);
 
     // record historic position.
     historic_position_w.push_back(pos.clone());
@@ -110,6 +111,7 @@ void MapPoint::ComputeDistinctiveDescriptors() {
         // Replace measurement in keyframe
         for (const auto &obj : p.second) {
             uint idx = obj->GetMapPointIdx(shared_from_this());
+            if (idx == -1) continue;
             all_ob_desps.push_back(obj->desps.row(idx));
         }
     }

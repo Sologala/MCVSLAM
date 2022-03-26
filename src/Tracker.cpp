@@ -89,6 +89,7 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
                 auto lkfmps_wide = GetLastKeyFrame()->WIDE->GetMapPoints();
                 uint pcnt = cur_frame->LEFT->ProjectBunchMapPoints(lkfmps, 5);
                 uint pcntw = cur_frame->WIDE->ProjectBunchMapPoints(lkfmps_wide, 5);
+
                 int cnt = PoseEstimation::PoseOptimization(cur_frame);
                 _.tock();
                 // auto k = getchar();
@@ -302,10 +303,10 @@ uint Tracker::Init(KeyFrame &cur_frame) {
         cv::KeyPoint kp = cur_frame->LEFT->kps[i];
         float depth = cur_frame->depth_left[i];
         if (depth != -1) {
-            cv::Mat mp = cur_frame->LEFT->mpCam->unproject_z(kp.pt, depth);
+            cv::Mat pos = cur_frame->LEFT->mpCam->unproject_z(kp.pt, depth);
             // cout << mp << endl;
             auto mpr =
-                map->CreateMappoint(mp, cur_frame->LEFT->desps.row(i), cur_frame->LEFT->kps[i].octave, cur_frame->id, CAM_NAME::L, MP_TYPE::STEREO);
+                map->CreateMappoint(pos, cur_frame->LEFT->desps.row(i), cur_frame->LEFT->kps[i].octave, cur_frame->id, CAM_NAME::L, MP_TYPE::STEREO);
             cur_frame->LEFT->AddMapPoint(mpr, i);
             mpr->ProjectResRecord(true);
             cnt += 1;

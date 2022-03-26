@@ -34,7 +34,7 @@
 using namespace std;
 using namespace MCVSLAM;
 
-int idx_number_kps;
+int idx_numbekr_kps;
 int tic = 0;
 int main(int argc, char** argv) {
     std::vector<shared_ptr<Capture>> caps;

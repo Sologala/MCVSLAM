@@ -38,11 +38,14 @@ uint KL_Track(ObjectRef obj1, ObjectRef obj2, unordered_map<MapPointRef, uint> &
     std::vector<cv::KeyPoint> next_kps;
     std::vector<cv::Point2f> next_pts;
     std::vector<MapPointRef> mps = obj1->GetMapPointsVector();
-    if (mps.size() < 10) return 0;
+    if (mps.size() < 10) {
+        return 0;
+    }
     std::vector<uint> kps_idxs;
 
     for (const auto &mp : mps) {
         uint idx = obj1->GetMapPointIdx(mp);
+        if (idx == -1) continue;
         kps.push_back(obj1->kps[idx]);
         pts.push_back(obj1->kps[idx].pt);
         kps_idxs.push_back(idx);
@@ -72,6 +75,7 @@ uint KL_Track(ObjectRef obj1, ObjectRef obj2, unordered_map<MapPointRef, uint> &
             cnt++;
         }
     }
+
     return cnt;
 }
 
@@ -139,10 +143,11 @@ Frame::Frame(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, double time_sta
 
 Frame::~Frame() {
     // fmt::print("kf {} is freeing \n", this->id);
-    for (auto obj : {this->LEFT, this->WIDE})
-        for (auto mp : obj->GetMapPoints()) {
+    for (auto obj : {this->LEFT, this->WIDE}) {
+        for (auto mp : obj->GetMapPoints(true)) {
             mp->UnBindKeyFrame(this, obj);
         }
+    }
     Map::used_kf += 1;
     // fmt::print("kf {} is freed \n", this->id);
 }

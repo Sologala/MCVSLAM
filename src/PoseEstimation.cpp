@@ -56,6 +56,8 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
             op.addMapppint(mp, fixed);
             // Monocular observation
             uint idx = frame->LEFT->GetMapPointIdx(mp);
+            if (idx == -1) continue;
+
             cv::KeyPoint kp = frame->LEFT->kps[idx];
             if (frame->u_right[idx] != -1 && frame->u_right[idx] >= MIN_DISPARITY) {
                 op.addEdgeStereo(frame, mp, kp.pt, frame->u_right[idx], kp.octave);
@@ -68,6 +70,8 @@ int MCVSLAM::PoseEstimation::PoseOptimization(const KeyFrame &frame) {
         for (MapPointRef mp : frame->WIDE->GetMapPoints()) {
             op.addMapppint(mp, fixed);
             uint idx = frame->WIDE->GetMapPointIdx(mp);
+            if (idx == -1) continue;
+
             cv::KeyPoint kp = frame->WIDE->kps[idx];
             op.addEdgeToBody(frame, mp, kp.pt, kp.octave);
         }
