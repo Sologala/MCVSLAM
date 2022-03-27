@@ -9,9 +9,9 @@
 
 #include "Map.hpp"
 #include "Matcher.hpp"
+#include "ORBVocabulary.h"
 #include "Object.hpp"
 #include "Pinhole.hpp"
-#include "Vocabulary.h"
 #include "opencv2/core.hpp"
 #include "opencv2/highgui.hpp"
 #include "pyp/timer/timer.hpp"
@@ -364,7 +364,7 @@ int Frame::Parse(const std::string &config_file) {
     extractor_left = ORB(root["left_extractor_path"].AsPath());
     extractor_right = ORB(root["right_extractor_path"].AsPath());
     extractor_wide = ORB(root["wide_extractor_path"].AsPath());
-    Object::voc.load(root["bow_vocabulary_path"].As<string>());
+    Object::voc.loadFromBinaryFile(root["bow_vocabulary_path"].As<string>());
     return 0;
 }
 

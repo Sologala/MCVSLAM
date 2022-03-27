@@ -10,14 +10,13 @@
 #include <vector>
 
 #include "BaseCamera.hpp"
-#include "BowVector.h"
-#include "DBoW3.h"
 #include "FeatureVector.h"
 #include "MapPoint.hpp"
 #include "Matcher.hpp"
 #include "ORBExtractor.hpp"
+#include "ORBVocabulary.h"
 #include "Pinhole.hpp"
-#include "Vocabulary.h"
+// #include "Vocabulary.h"
 #include "pyp/fmt/fmt.hpp"
 using READLOCK = boost::shared_lock<boost::shared_mutex>;
 using WRITELOCK = boost::unique_lock<boost::shared_mutex>;
@@ -200,10 +199,10 @@ class Object {
 
     // Bow index
     bool is_bowed = false;
-    DBoW3::BowVector bow_vector;
-    DBoW3::FeatureVector bow_feature;
+    DBoW2::BowVector bow_vector;
+    DBoW2::FeatureVector bow_feature;
 
-    static DBoW3::Vocabulary voc;
+    static DBoW2::ORBVocabulary voc;
     ORB *extractor;
 
     void clear() {

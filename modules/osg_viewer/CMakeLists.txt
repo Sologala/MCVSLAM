@@ -1,7 +1,7 @@
 set(OpenGL_GL_PREFERENCE "GLVND")
 
 find_package(Boost COMPONENTS system filesystem REQUIRED)
-find_package(OpenCV 4  REQUIRED)
+message(${OpenCV_VERSION} "osg_viewer")
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(osgText)

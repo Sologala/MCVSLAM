@@ -41,24 +41,11 @@ MCVSLAM::System::System(const std::string& _config_file) : config_file(_config_f
 }
 
 MCVSLAM::System::~System() {
-    if (use_viewer) {
-        viewer->RequestStop();
-        while (viewer->IsStoped()) {
-            usleep(3000);
-        }
-        delete viewer;
-    }
-    tracker->Clear();
-    map->RequestStop();
-    while (map->IsStoped() == false) {
-        usleep(1);
-    }
-    map->Clear();
+    delete viewer;
     delete cam_left;
     delete cam_wide;
     delete tracker;
     delete map;
-
     fmt::print("system free done!\n");
 }
 
@@ -134,4 +121,18 @@ void MCVSLAM::System::Publish_TimeCost() {
     std_msgs::String msg;
     msg.data = ret;
     pub_time_cost.publish(msg);
+}
+
+void MCVSLAM::System::Stop() {
+    if (use_viewer) {
+        viewer->RequestStop();
+        while (viewer->IsStoped() == false) {
+            usleep(300);
+        }
+    }
+    map->RequestStop();
+    while (map->IsStoped() == false) {
+        usleep(300);
+    }
+    // fmt::print("system free done!\n");
 }

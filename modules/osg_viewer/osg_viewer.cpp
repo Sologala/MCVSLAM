@@ -2,6 +2,7 @@
 
 #include <opencv2/core/hal/interface.h>
 #include <pyp/fmt/core.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <boost/thread/lock_types.hpp>
@@ -180,9 +181,10 @@ void osg_viewer::Run() {
     // clear node_cloud_points when launch threads.
 
     while (1) {
-        try {
+        {
+            // boost::unique_lock<boost::mutex> lock(mtx_commit);
             viewer->frame();
-        } catch (std::runtime_error &e) {
+            // usleep(300);
         }
         // float x = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[0];
         // float y = viewer->getCamera()->getInverseViewMatrix().getTrans()._v[1];
@@ -333,7 +335,7 @@ void osg_viewer::DrawPredictTracjectories(const std::vector<cv::Mat> &Tcws, cons
     for (uint i = 0, sz = Tcws.size(); i < sz; i++) {
         DrawCam(Tcws[i], mask[i], r, g, b);
     }
-    if (Tcws.size()) SetCurViewFollow(Tcws.back());
+    // if (Tcws.size()) SetCurViewFollow(Tcws.back());
 }
 
 void osg_viewer::SetCurrentCamera(const cv::Mat Tcw) {
@@ -342,6 +344,7 @@ void osg_viewer::SetCurrentCamera(const cv::Mat Tcw) {
     cv::transpose(Tcw_lhs, Tcw_t);
     osg::Matrixd mat(Tcw_t.ptr<float>());
     node_curr_cam->setMatrix(mat);
+    SetCurViewFollow(Tcw);
 }
 
 void osg_viewer::DrawCam(const cv::Mat Tcw, bool ned_shape, uint r, uint g, uint b) {
@@ -397,95 +400,13 @@ void osg_viewer::SetCurViewFollow(const cv::Mat Tcw) {
     viewer->getCameraManipulator()->setByMatrix(tf * follow_tf * mat);
 }
 
-osg::ref_ptr<osg::Node> osg_viewer::CreateCoordinate() {
-    osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
-    osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
-    pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
-
-    //创建保存几何信息的对象
-    osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
-
-    double lineLength = 100.0;
-
-    //创建四个顶点
-    osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
-    v->push_back(osg::Vec3(0.0f, 0.0f, 0.0f));
-    v->push_back(osg::Vec3(lineLength, 0.0f, 0.0f));
-    v->push_back(osg::Vec3(0.0f, 0.0f, 0.0f));
-    v->push_back(osg::Vec3(0.0f, lineLength, 0.0f));
-    v->push_back(osg::Vec3(0.0f, 0.0f, 0.0f));
-    v->push_back(osg::Vec3(0.0f, 0.0f, lineLength));
-    geom->setVertexArray(v.get());
-
-    //为每个顶点指定一种颜色
-    osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
-    c->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));  //坐标原点为红色
-    c->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));  // x red
-    c->push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));  //坐标原点为绿色
-    c->push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));  // y green
-    c->push_back(osg::Vec4(0.0f, 0.0f, 1.0f, 1.0f));  //坐标原点为蓝色
-    c->push_back(osg::Vec4(0.0f, 0.0f, 1.0f, 1.0f));  // z blue
-    //如果没指定颜色则会变为黑色
-    geom->setColorArray(c.get());
-    geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-
-    //三个轴
-    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, 2));  // X
-    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 2, 2));  // Y
-    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 4, 2));  // Z
-
-    osg::ref_ptr<osgText::Text> pTextXAuxis = new osgText::Text;
-    pTextXAuxis->setText(L"X");
-    pTextXAuxis->setFont("Fonts/simhei.ttf");
-    pTextXAuxis->setAxisAlignment(osgText::Text::SCREEN);
-    pTextXAuxis->setCharacterSize(16);
-    pTextXAuxis->setPosition(osg::Vec3(lineLength, 0.0f, 0.0f));
-
-    osg::ref_ptr<osgText::Text> pTextYAuxis = new osgText::Text;
-    pTextYAuxis->setText(L"Y");
-    pTextYAuxis->setFont("Fonts/simhei.ttf");
-    pTextYAuxis->setAxisAlignment(osgText::Text::SCREEN);
-    pTextYAuxis->setCharacterSize(16);
-    pTextYAuxis->setPosition(osg::Vec3(0.0f, lineLength, 0.0f));
-
-    osg::ref_ptr<osgText::Text> pTextZAuxis = new osgText::Text;
-    pTextZAuxis->setText(L"Z");
-    pTextZAuxis->setFont("Fonts/simhei.ttf");
-    pTextZAuxis->setAxisAlignment(osgText::Text::SCREEN);
-    pTextZAuxis->setCharacterSize(16);
-    pTextZAuxis->setPosition(osg::Vec3(0.0f, 0.0f, lineLength));
-
-    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
-    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(3.0), osg::StateAttribute::ON);
-
-    geode->addDrawable(pShapeDrawable.get());
-    geode->addDrawable(geom.get());
-    // geode->addDrawable(pTextXAuxis.get());
-    // geode->addDrawable(pTextYAuxis.get());
-    // geode->addDrawable(pTextZAuxis.get());
-    return geode.release();
-}
-void osg_viewer::Parse(std::string config_file) {
-    Yaml::Node fs;
-    Yaml::Parse(fs, config_file);
-    model_path = fs["model_path"].As<std::string>();
-    mappoint_size = fs["mappoint_size"].As<float>();
-    camera_width = fs["camera_width"].As<float>();
-    is_show_model = fs["is_show_model"].As<bool>();
-    wnd_rect = cv::Rect(fs["window_x"].As<int>(), fs["window_y"].As<int>(), fs["window_width"].As<int>(), fs["window_height"].As<int>());
-    gt_tracj_path = fs["gt_traj"].As<std::string>();
-
-    vector<float> follow_tf_vec = fs["follow_tf"].AsVector<float>();
-    follow_tf.makeTranslate(follow_tf_vec[0], follow_tf_vec[1], follow_tf_vec[2]);
-}
-osg_viewer::osg_viewer(const std::string &config_file) {
+void osg_viewer::init() {
     draw_buffer[0] = new osg::Group();
     draw_buffer[1] = new osg::Group();
     ground_trugh_traj = new osg::Group();
     points_cams = new osg::MatrixTransform();
     points_cams_align = new osg::MatrixTransform();
-    Parse(config_file);
+
     layer_environment = new osg::Group();
     layer_curr_cam = new osg::MatrixTransform();
     node_curr_cam = new osg::MatrixTransform();
@@ -501,7 +422,7 @@ osg_viewer::osg_viewer(const std::string &config_file) {
 
     // Create viewer
     viewer = new osgViewer::Viewer();
-    viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
+    // viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
     // Set Background color
     viewer->getCamera()->setClearColor(osg::Vec4(1, 1, 1, 0));
     viewer->setLightingMode(osg::View::LightingMode::NO_LIGHT);
@@ -566,9 +487,105 @@ osg_viewer::osg_viewer(const std::string &config_file) {
     });
 
     viewer->addEventHandler(&kbtriger);
+
+    inited = true;
 }
 
-osg_viewer::~osg_viewer() { pthread->join(); }
+osg::ref_ptr<osg::Node> osg_viewer::CreateCoordinate() {
+    osg::ref_ptr<osg::Sphere> pSphereShape = new osg::Sphere(osg::Vec3(0, 0, 0), 0.1f);
+    osg::ref_ptr<osg::ShapeDrawable> pShapeDrawable = new osg::ShapeDrawable(pSphereShape.get());
+    pShapeDrawable->setColor(osg::Vec4(0.0, 0.0, 0.0, 1.0));
+
+    //创建保存几何信息的对象
+    osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
+
+    double lineLength = 100.0;
+
+    //创建四个顶点
+    osg::ref_ptr<osg::Vec3Array> v = new osg::Vec3Array();
+    v->push_back(osg::Vec3(0.0f, 0.0f, 0.0f));
+    v->push_back(osg::Vec3(lineLength, 0.0f, 0.0f));
+    v->push_back(osg::Vec3(0.0f, 0.0f, 0.0f));
+    v->push_back(osg::Vec3(0.0f, lineLength, 0.0f));
+    v->push_back(osg::Vec3(0.0f, 0.0f, 0.0f));
+    v->push_back(osg::Vec3(0.0f, 0.0f, lineLength));
+    geom->setVertexArray(v.get());
+
+    //为每kk个顶点指定一种颜色
+    osg::ref_ptr<osg::Vec4Array> c = new osg::Vec4Array();
+    c->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));  //坐标原点为红色
+    c->push_back(osg::Vec4(1.0f, 0.0f, 0.0f, 1.0f));  // x red
+    c->push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));  //坐标原点为绿色
+    c->push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));  // y green
+    c->push_back(osg::Vec4(0.0f, 0.0f, 1.0f, 1.0f));  //坐标原点为蓝色
+    c->push_back(osg::Vec4(0.0f, 0.0f, 1.0f, 1.0f));  // z blue
+    //如果没指定颜色则会变为黑色
+    geom->setColorArray(c.get());
+    geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+
+    //三个轴
+    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 0, 2));  // X
+    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 2, 2));  // Y
+    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES, 4, 2));  // Z
+
+    osg::ref_ptr<osgText::Text> pTextXAuxis = new osgText::Text;
+    pTextXAuxis->setText(L"X");
+    pTextXAuxis->setFont("Fonts/simhei.ttf");
+    pTextXAuxis->setAxisAlignment(osgText::Text::SCREEN);
+    pTextXAuxis->setCharacterSize(16);
+    pTextXAuxis->setPosition(osg::Vec3(lineLength, 0.0f, 0.0f));
+
+    osg::ref_ptr<osgText::Text> pTextYAuxis = new osgText::Text;
+    pTextYAuxis->setText(L"Y");
+    pTextYAuxis->setFont("Fonts/simhei.ttf");
+    pTextYAuxis->setAxisAlignment(osgText::Text::SCREEN);
+    pTextYAuxis->setCharacterSize(16);
+    pTextYAuxis->setPosition(osg::Vec3(0.0f, lineLength, 0.0f));
+
+    osg::ref_ptr<osgText::Text> pTextZAuxis = new osgText::Text;
+    pTextZAuxis->setText(L"Z");
+    pTextZAuxis->setFont("Fonts/simhei.ttf");
+    pTextZAuxis->setAxisAlignment(osgText::Text::SCREEN);
+    pTextZAuxis->setCharacterSize(16);
+    pTextZAuxis->setPosition(osg::Vec3(0.0f, 0.0f, lineLength));
+
+    osg::ref_ptr<osg::Geode> geode = new osg::Geode();
+    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(3.0), osg::StateAttribute::ON);
+
+    geode->addDrawable(pShapeDrawable.get());
+    geode->addDrawable(geom.get());
+    // geode->addDrawable(pTextXAuxis.get());
+    // geode->addDrawable(pTextYAuxis.get());
+    // geode->addDrawable(pTextZAuxis.get());
+    return geode.release();
+}
+void osg_viewer::Parse(std::string config_file) {
+    Yaml::Node fs;
+    Yaml::Parse(fs, config_file);
+    model_path = fs["model_path"].As<std::string>();
+    mappoint_size = fs["mappoint_size"].As<float>();
+    camera_width = fs["camera_width"].As<float>();
+    is_show_model = fs["is_show_model"].As<bool>();
+    wnd_rect = cv::Rect(fs["window_x"].As<int>(), fs["window_y"].As<int>(), fs["window_width"].As<int>(), fs["window_height"].As<int>());
+    gt_tracj_path = fs["gt_traj"].As<std::string>();
+
+    vector<float> follow_tf_vec = fs["follow_tf"].AsVector<float>();
+    follow_tf.makeTranslate(follow_tf_vec[0], follow_tf_vec[1], follow_tf_vec[2]);
+}
+osg_viewer::osg_viewer(const std::string &config_file) {
+    Parse(config_file);
+    init();
+}
+
+osg_viewer::~osg_viewer() {
+    if (pthread) {
+        pthread->join();
+    }
+    viewer.release();
+    draw_buffer[0].release();
+    draw_buffer[1].release();
+}
 
 void osg_viewer::Start() {
     if (pthread) {

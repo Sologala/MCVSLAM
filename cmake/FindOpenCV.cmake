@@ -7,7 +7,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     message(USE " " OpenCV  " " ${OpenCV_DIR})
     find_package(OpenCV 4.5.1 EXACT)
 else()
-    find_package(OpenCV 4 REQUIRED)
+    find_package(OpenCV  REQUIRED)
+    message(${OpenCV_VERSION})
 endif()
 
 

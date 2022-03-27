@@ -54,13 +54,12 @@ MapPointRef Map::CreateMappoint(double x, double y, double z, cv::Mat _desp, uin
 
 MapPointRef Map::CreateMappoint(cv::Mat xyz, cv::Mat _desp, uint _level, uint kf_id, CAM_NAME cam_name, MP_TYPE type) {
     assert(!xyz.empty() && xyz.rows == 3);
-    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, _level, kf_id, cam_name, type);
 
-    {
-        WRITELOCK mtx_recent_mps;
-        assert(ref != nullptr);
-        recent_created_mps.push_back(ref);
-    }
+    UNIQUELOCK lock(mtx_recent_mps);
+
+    MapPointRef ref = CreateMappoint(xyz.at<float>(0), xyz.at<float>(1), xyz.at<float>(2), _desp, _level, kf_id, cam_name, type);
+    assert(ref != nullptr);
+    recent_created_mps.push_back(ref);
     return ref;
 }
 
@@ -746,7 +745,6 @@ void Map::Run() {
 }
 
 void Map::LocalMapping() {
-    fmt::print("dasjfkjasdl");
     // get a frame from queue;
     KeyFrame last_kf = nullptr;
     while (IsRequestStop() == false) {
@@ -856,7 +854,7 @@ void Map::LocalMapping() {
             if (last_kf->id != 0) {
                 // Perform local ba
                 MyTimer::Timer _("LBA");
-                std::unordered_set<KeyFrame> local_kfs = GrabLocalMap_Mappoint(last_kf, 1);
+                std::unordered_set<KeyFrame> local_kfs = GrabLocalMap_EssGraph(last_kf, 1);
                 std::unordered_set<KeyFrame> fix_local_kfs = GrabAnchorKeyFrames(local_kfs);
                 local_kfs.insert(last_kf);
                 uint op_cnt = PoseEstimation::BoundleAdjustment(local_kfs, fix_local_kfs, 10, &PoseEstimation::FilterCallBack_Chi2);

@@ -2,7 +2,8 @@
 #include <osg/Matrixd>
 #include <osg/Vec3>
 #include <osg/ref_ptr>
-#include <osgGA/EventHandler>
+// #include <osgGA/EventHandler>
+#include <osgGA/EventQueue>
 #include <osgGA/GUIEventAdapter>
 #include <osgGA/OrbitManipulator>
 #include <stdexcept>

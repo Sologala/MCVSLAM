@@ -12,12 +12,12 @@
 
 #include "Map.hpp"
 #include "Matcher.hpp"
-#include "Vocabulary.h"
+#include "ORBVocabulary.h"
 using namespace std;
 
 namespace MCVSLAM {
 
-DBoW3::Vocabulary Object::voc;
+DBoW2::ORBVocabulary Object::voc;
 
 Object::~Object() {}
 
@@ -50,15 +50,15 @@ size_t Object::GetMapPointIdx(MapPointRef pMP) {
 }
 
 MapPointRef Object::GetMapPoint(size_t idx) {
-    READLOCK lock(mtx_mps);
     if (idx >= size()) return NULL;
     //	data_check();
-
+    READLOCK lock(mtx_mps);
     if (mIDX2MP.count(idx) == 0) {
         // throw std::runtime_error("Not exist");
 
         return NULL;
     }
+
     MapPointRef pMP = mIDX2MP[idx];
     if (mMP2IDX[pMP] != idx) {
         cout << mMP2IDX[pMP] << endl;
@@ -242,13 +242,24 @@ uint Object::ProjectBunchMapPoints(const std::unordered_set<MapPointRef> &mps, f
 }
 
 void Object::ComputeBow() {
+    std::vector<cv::Mat> v_desps;
+    WRITELOCK lock(mtx_mps);
     if (is_bowed == false) {
-        std::vector<cv::Mat> v_desps;
         for (int i = 0, sz = desps.rows; i < sz; i++) {
-            v_desps.push_back(desps.row(i));
+            cv::Mat temp;
+            desps.row(i).copyTo(temp);
+            v_desps.push_back(temp);
         }
+
         voc.transform(v_desps, bow_vector, bow_feature, 4);
         is_bowed = true;
+    }
+
+    // Check transform results
+    for (auto it : bow_feature) {
+        for (auto idx : it.second) {
+            assert(!(idx < 0 || idx >= desps.rows));
+        }
     }
 }
 

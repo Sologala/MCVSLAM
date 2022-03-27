@@ -1,5 +1,4 @@
 
-
 add_library(
 capture STATIC 
 ./capture.cpp
@@ -14,7 +13,6 @@ target_link_libraries(
     pyp::fmt 
     ${OpenCV_LIBS}
 )
-
 
 add_executable(ros_capture ./ros_capture.cpp)
 
@@ -32,3 +30,4 @@ target_link_libraries(
     pyp::fmt
     # ros_msg
 )
+

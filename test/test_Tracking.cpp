@@ -86,7 +86,10 @@ int main(int argc, char** argv) {
             break;
         }
     }
+    ros::shutdown();
+    slam.Stop();
     slam.SaveTracjtory();
     fmt::print("system done\n");
+
     return 0;
 }

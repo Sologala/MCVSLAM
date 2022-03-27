@@ -71,7 +71,7 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
 
                 cur_frame->SetPose(GetLastFrame()->GetPose());
                 int opcnt = PoseEstimation::PoseOptimization(cur_frame);
-                fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
+                // fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
                 if (opcnt < 50) {
                     fmt::print("Track LastKeyFrame Faild! \n");
                     // exit(0);
@@ -97,7 +97,7 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
                 if (viewer) {
                     viewer->SetCurrentCamera(cur_frame->GetPose());
                 }
-                fmt::print("track MotionModel {} project left {} project wide  {}\n", cnt, pcnt, pcntw);
+                // fmt::print("track MotionModel {} project left {} project wide  {}\n", cnt, pcnt, pcntw);
                 if (cnt < Th_motionmodel_min_mps) {
                     fmt::print("Track MotionModel Faild! \n");
                     state = Track_State::TRACK_FAILD;
@@ -107,7 +107,7 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
                         uint cnt_w = Bow_Track(GetLastKeyFrame()->WIDE, cur_frame->WIDE);
                         cur_frame->SetPose(GetLastFrame()->GetPose());
                         int opcnt = PoseEstimation::PoseOptimization(cur_frame);
-                        fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
+                        // fmt::print("[track LastKeyFrame] left: {} wide:{}, oped {}\n", cnt_l, cnt_w, opcnt);
                         if (opcnt < 20) {
                             fmt::print("Track LastKeyFrame Faild! \n");
                             // exit(0);
@@ -130,8 +130,8 @@ Track_State Tracker::Track(cv::Mat imgleft, cv::Mat imgright, cv::Mat imgwide, d
                 uint pcnt_w = cur_frame->WIDE->ProjectBunchMapPoints(local_mps_wide, 7);
                 int opcnt = PoseEstimation::PoseOptimization(cur_frame);
 
-                fmt::print("[track local map]{}  {} kfs, {} mps,  project left {} wide {}\n", opcnt, local_kfs.size(), local_mps.size(), pcnt,
-                           pcnt_w);
+                // fmt::print("[track local map]{}  {} kfs, {} mps,  project left {} wide {}\n", opcnt, local_kfs.size(), local_mps.size(), pcnt,
+                //            pcnt_w);
                 if (opcnt < 50) {
                     fmt::print("Track local map Faild! \n");
                     // exit(0);

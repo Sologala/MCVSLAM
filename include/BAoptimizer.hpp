@@ -48,6 +48,8 @@ class BAoptimizer : public g2o::SparseOptimizer {
 
     void DumpCalculationGraph(const std::string &file_name);
 
+    //
+
     cv::Mat eval(const KeyFrame &kf);
     cv::Mat eval(const MapPointRef &mp);
 

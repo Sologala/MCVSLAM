@@ -10,7 +10,7 @@
 #include <opencv2/core/types.hpp>
 #include <opencv2/features2d.hpp>
 #include <opencv2/highgui.hpp>
-#include <opencv2/xfeatures2d.hpp>
+// #include <opencv2/xfeatures2d.hpp>
 #include <queue>
 #include <stdexcept>
 #include <utility>
@@ -34,12 +34,12 @@ MatchRes &MatchRes::FilterThreshold(const int thres_hold) {
     return (*this);
 }
 
-MatchRes &MatchRes::Filter_GMS(const cv::Size sz1, const cv::Size sz2, const Keypoints &kps1, const Keypoints &kps2, uint threshold) {
-    MatchRes ret;
-    cv::xfeatures2d::matchGMS(sz1, sz2, kps1, kps2, *this, ret, false, false, threshold);
-    *this = ret;
-    return *this;
-}
+// MatchRes &MatchRes::Filter_GMS(const cv::Size sz1, const cv::Size sz2, const Keypoints &kps1, const Keypoints &kps2, uint threshold) {
+//     MatchRes ret;
+//     cv::xfeatures2d::matchGMS(sz1, sz2, kps1, kps2, *this, ret, false, false, threshold);
+//     *this = ret;
+//     return *this;
+// }
 
 const int HISTO_LENGTH = 40;
 const float HISTO_FACTOR = 1.0f / (360.0f / HISTO_LENGTH);
@@ -143,15 +143,15 @@ MatchRes Matcher::BFMatch(const Desps &desp1, const Desps &desp2) {
     return res;
 }
 
-MatchResKnn Matcher::DBowMatch(const Desps &desp1, const DBoW3::FeatureVector &bow_feat1, const Desps &desp2, const DBoW3::FeatureVector &bow_feat2) {
+MatchResKnn Matcher::DBowMatch(const Desps &desp1, const DBoW2::FeatureVector &bow_feat1, const Desps &desp2, const DBoW2::FeatureVector &bow_feat2) {
     MatchResKnn res;
     // res.resize(desp1.rows, std::vector<cv::DMatch>(2));
     // We perform the matching over ORB that belong to the same vocabulary node
     // (at a certain level)
-    DBoW3::FeatureVector::const_iterator f1_it = bow_feat1.begin();
-    DBoW3::FeatureVector::const_iterator f1_it_end = bow_feat1.end();
-    DBoW3::FeatureVector::const_iterator f2_it = bow_feat2.begin();
-    DBoW3::FeatureVector::const_iterator f2_it_end = bow_feat2.end();
+    DBoW2::FeatureVector::const_iterator f1_it = bow_feat1.begin();
+    DBoW2::FeatureVector::const_iterator f1_it_end = bow_feat1.end();
+    DBoW2::FeatureVector::const_iterator f2_it = bow_feat2.begin();
+    DBoW2::FeatureVector::const_iterator f2_it_end = bow_feat2.end();
 
     while (f1_it != f1_it_end && f2_it != f2_it_end) {
         if (f1_it->first == f2_it->first) {
@@ -160,7 +160,11 @@ MatchResKnn Matcher::DBowMatch(const Desps &desp1, const DBoW3::FeatureVector &b
 
             // TODO 使用多线程加速
             for (uint f1_kp_idx : f1_kp_idxs) {
+                // 转化的词典有问题？
+                if (f1_kp_idx < 0 || f1_kp_idx > desp1.rows) continue;
+
                 const cv::Mat &d1 = desp1.row(f1_kp_idx);
+
                 uint d[2] = {999, 999};
                 uint d_idx[2] = {0, 0};
                 for (uint f2_kp_idx : f2_kp_idxs) {

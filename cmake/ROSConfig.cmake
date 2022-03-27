@@ -1,5 +1,5 @@
-set(cv_bridge_DIR "${CMAKE_SOURCE_PATH}/ThirdParty/installed/share/cv_bridge/cmake")
-
+# set(cv_bridge_DIR "${CMAKE_SOURCE_PATH}/ThirdParty/installed/share/cv_bridge/cmake")
+set(cv_bridge_DIR "${CMAKE_SOURCE_PATH}ThirdParty/installed/share/cv_bridge/cmake")
 find_package(catkin REQUIRED COMPONENTS
     cv_bridge
     image_transport

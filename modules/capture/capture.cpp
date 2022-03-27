@@ -66,13 +66,17 @@ Capture::Capture(const std::string &_fileName) : file_name(_fileName) {
             string path = GetFile_Path(_fileName);
             path += ("/*." + ext);
             printf("capture from path %s, %d imgs\n", path.c_str(), static_cast<int>(img_paths.size()));
-            cv::glob(path, img_paths);
+            std::vector<cv::String> temp;
+            cv::glob(path, temp);
+            img_paths.assign(temp.begin(), temp.end());
             printf("capture from path %s, %d imgs\n", path.c_str(), static_cast<int>(img_paths.size()));
             sort(img_paths.begin(), img_paths.end());
         }
     } else if (_fileName.find("*") != -1) {
         mode = Work_Mode::PATH;
-        cv::glob(_fileName, img_paths);
+        std::vector<cv::String> temp;
+        cv::glob(_fileName, temp);
+        img_paths.assign(temp.begin(), temp.end());
         printf("capture from path %s, %d imgs\n", _fileName.c_str(), static_cast<int>(img_paths.size()));
         sort(img_paths.begin(), img_paths.end());
     }

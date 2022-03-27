@@ -4,7 +4,7 @@ camera_width: 10
 is_show_model: true
 window_x: 0
 window_y: 0
-window_width: 1200
-window_height: 1600
+window_width: 800
+window_height: 400
 gt_traj: /home/wen/SLAM/MCVSLAM/data/trajectory_ori.txt
 follow_tf: 0 0 20

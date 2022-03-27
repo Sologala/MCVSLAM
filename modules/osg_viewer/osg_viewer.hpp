@@ -54,6 +54,7 @@ class osg_viewer {
     void RequestStop();
     void DrawPredictTracjectories(const std::vector<cv::Mat>& Tcws, const std::vector<bool>& mask, uint r, uint g, uint b);
     void SetCurrentCamera(const cv::Mat Tcw);
+    void init();
 
    private:
     void SetCurViewFollow(const cv::Mat Twc);
@@ -69,7 +70,7 @@ class osg_viewer {
     bool is_show_model = false;
 
     bool gate_draw_essential_graph = true;
-
+    bool inited = false;
     cv::Rect wnd_rect;
 
     osg::Matrixd tf;

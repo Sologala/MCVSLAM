@@ -24,6 +24,7 @@ class System {
 
     void Publish_Tracjtory();
     void Publish_TimeCost();
+    void Stop();
 
    public:
     Tracker* tracker = nullptr;
